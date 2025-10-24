@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 class ConfigVars(StrEnum):
     discord_token: str = "DISCORD_TOKEN"
+    guild_id: str = "GUILD_ID"
     mongo_uri: str = "MONGO_URI"
     debug_mode: str = "DEBUG_MODE"
     channels: str = "CHANNEL_COLLECTION"
