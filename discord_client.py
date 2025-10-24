@@ -20,7 +20,7 @@ class DiscordClient(discord.Client):
         logger.info("DiscordClient initialized.")
 
     @property
-    def guild(self):
+    def current_guild(self) -> discord.Guild:
         if not self._guild:
             raise RuntimeError("Guild not set")
         return self._guild
