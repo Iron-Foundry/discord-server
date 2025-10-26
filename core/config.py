@@ -1,18 +1,19 @@
-from enum import StrEnum
+from enum import Enum
+from dotenv import load_dotenv
+from loguru import logger
 import os
 
-from loguru import logger
-from dotenv import load_dotenv
 
+class ConfigVars(str, Enum):
+    """Environment variable keys"""
 
-class ConfigVars(StrEnum):
-    discord_token: str = "DISCORD_TOKEN"
-    guild_id: str = "GUILD_ID"
-    mongo_uri: str = "MONGO_URI"
-    debug_mode: str = "DEBUG_MODE"
-    channels: str = "CHANNEL_COLLECTION"
-    roles: str = "ROLE_COLLECTION"
-    users: str = "USER_COLLECTION"
+    DISCORD_TOKEN = "DISCORD_TOKEN"
+    GUILD_ID = "GUILD_ID"
+    MONGO_URI = "MONGO_URI"
+    DEBUG_MODE = "DEBUG_MODE"
+    CHANNELS = "CHANNEL_COLLECTION"
+    ROLES = "ROLE_COLLECTION"
+    USERS = "USER_COLLECTION"
 
 
 class ConfigInterface:
@@ -21,7 +22,7 @@ class ConfigInterface:
     def __init__(self) -> None:
         load_dotenv()
 
-    def load_environment(self):
+    def load_environment(self) -> None:
         logger.info("Reloading Environment")
         load_dotenv()
 
