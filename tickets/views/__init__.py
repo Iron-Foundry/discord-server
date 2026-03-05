@@ -2,8 +2,6 @@ from .panel import TicketPanelView, TicketTypeSelect, build_panel_embed
 from .ticket_tools import (
     TicketToolsView,
     CloseReasonModal,
-    AddUserModal,
-    RemoveUserModal,
     build_tools_embed,
 )
 from .reopen import ReopenView, build_closed_embed
