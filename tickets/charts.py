@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 
 import discord
 import plotly.graph_objects as go
+from loguru import logger
 
 from tickets.models.stats import HandlerStats, LeaderboardEntry
 
@@ -27,16 +29,23 @@ def _apply_base_layout(fig: go.Figure) -> None:
     )
 
 
-def _fig_to_file(
+async def _render(
     fig: go.Figure, filename: str, width: int, height: int
 ) -> discord.File:
-    """Render a Plotly figure to a PNG discord.File."""
-    img_bytes: bytes = fig.to_image(format="png", width=width, height=height)
+    """Render a Plotly figure to PNG in a thread and wrap as a discord.File."""
+    img_bytes: bytes = await asyncio.to_thread(
+        fig.to_image, format="png", width=width, height=height
+    )
     return discord.File(io.BytesIO(img_bytes), filename=filename)
 
 
-def build_stats_chart(stats: HandlerStats, display_name: str) -> discord.File:
-    """Horizontal bar chart of ticket type breakdown for a single handler."""
+async def build_stats_chart(
+    stats: HandlerStats, display_name: str
+) -> discord.File | None:
+    """Horizontal bar chart of ticket type breakdown for a single handler.
+
+    Returns None if chart rendering fails.
+    """
     if stats.type_breakdown:
         types = list(stats.type_breakdown.keys())
         counts = [stats.type_breakdown[t] for t in types]
@@ -59,21 +68,30 @@ def build_stats_chart(stats: HandlerStats, display_name: str) -> discord.File:
     fig.update_layout(  # type: ignore[call-arg]
         title={"text": f"Tickets by Type — {display_name}", "font": {"color": _TEXT}},
     )
-    return _fig_to_file(fig, "stats.png", width=700, height=350)
+    try:
+        return await _render(fig, "stats.png", width=700, height=350)
+    except Exception as e:
+        logger.warning(f"Failed to render stats chart for {display_name!r}: {e}")
+        return None
 
 
-def build_leaderboard_chart(
+async def build_leaderboard_chart(
     entries: list[LeaderboardEntry],
     names: dict[int, str],
     metric: str = "closed",
-) -> discord.File:
+) -> discord.File | None:
     """Vertical bar chart for the leaderboard.
 
     Args:
         entries: Ranked leaderboard entries.
         names: Mapping of staff_id → display name.
         metric: ``"closed"`` for ticket count; ``"resolution"`` for avg hours.
+
+    Returns None if chart rendering fails or there are no entries.
     """
+    if not entries:
+        return None
+
     labels = [names.get(e.staff_id, str(e.staff_id)) for e in entries]
 
     if metric == "resolution":
@@ -105,4 +123,8 @@ def build_leaderboard_chart(
         title={"text": chart_title, "font": {"color": _TEXT}},
         yaxis={"title": y_title, "gridcolor": _GRID, "zerolinecolor": _GRID},
     )
-    return _fig_to_file(fig, "leaderboard.png", width=700, height=400)
+    try:
+        return await _render(fig, "leaderboard.png", width=700, height=400)
+    except Exception as e:
+        logger.warning(f"Failed to render leaderboard chart: {e}")
+        return None

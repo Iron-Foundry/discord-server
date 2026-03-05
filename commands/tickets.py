@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
+from loguru import logger
 
 from commands.checks import handle_check_failure, is_senior_staff, is_staff
 from commands.help_registry import HelpEntry, HelpGroup, HelpRegistry
@@ -514,27 +515,36 @@ class TicketGroup(
 
         await interaction.response.defer(ephemeral=True, thinking=True)
 
-        target = user if user is not None else interaction.user
-        if not isinstance(target, discord.Member):
-            await interaction.followup.send(
-                "Could not resolve the target member.", ephemeral=True
-            )
-            return
+        try:
+            target = user if user is not None else interaction.user
+            if not isinstance(target, discord.Member):
+                await interaction.followup.send(
+                    "Could not resolve the target member.", ephemeral=True
+                )
+                return
 
-        since = _parse_period(period)
-        handler_stats = await self._service.get_handler_stats(target.id, since)
-        if handler_stats is None:
-            await interaction.followup.send(
-                "No closed tickets found for this period.", ephemeral=True
-            )
-            return
+            since = _parse_period(period)
+            handler_stats = await self._service.get_handler_stats(target.id, since)
+            if handler_stats is None:
+                await interaction.followup.send(
+                    "No closed tickets found for this period.", ephemeral=True
+                )
+                return
 
-        embed = _build_stats_embed(handler_stats, target.display_name, period)
-        chart = build_stats_chart(handler_stats, target.display_name)
-        view = StatsView(self._service, target.id, target.display_name, period)
-        await interaction.followup.send(
-            embed=embed, file=chart, view=view, ephemeral=True
-        )
+            embed = _build_stats_embed(handler_stats, target.display_name, period)
+            view = StatsView(self._service, target.id, target.display_name, period)
+            chart = await build_stats_chart(handler_stats, target.display_name)
+            if chart:
+                await interaction.followup.send(
+                    embed=embed, file=chart, view=view, ephemeral=True
+                )
+            else:
+                await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+        except Exception:
+            logger.exception("Unhandled error in /ticket stats")
+            await interaction.followup.send(
+                "An error occurred while fetching stats.", ephemeral=True
+            )
 
     # ------------------------------------------------------------------
     # /ticket leaderboard [period]
@@ -556,25 +566,34 @@ class TicketGroup(
 
         await interaction.response.defer(ephemeral=True, thinking=True)
 
-        since = _parse_period(period)
-        entries = await self._service.get_leaderboard(since)
-        names: dict[int, str] = {}
-        if interaction.guild:
-            names = {
-                e.staff_id: (
-                    m.display_name
-                    if (m := interaction.guild.get_member(e.staff_id)) is not None
-                    else f"<@{e.staff_id}>"
-                )
-                for e in entries
-            }
+        try:
+            since = _parse_period(period)
+            entries = await self._service.get_leaderboard(since)
+            names: dict[int, str] = {}
+            if interaction.guild:
+                names = {
+                    e.staff_id: (
+                        m.display_name
+                        if (m := interaction.guild.get_member(e.staff_id)) is not None
+                        else f"<@{e.staff_id}>"
+                    )
+                    for e in entries
+                }
 
-        embed = _build_leaderboard_embed(entries, names, period, "closed")
-        chart = build_leaderboard_chart(entries, names, "closed")
-        view = LeaderboardView(self._service, period, "closed")
-        await interaction.followup.send(
-            embed=embed, file=chart, view=view, ephemeral=True
-        )
+            embed = _build_leaderboard_embed(entries, names, period, "closed")
+            view = LeaderboardView(self._service, period, "closed")
+            chart = await build_leaderboard_chart(entries, names, "closed")
+            if chart:
+                await interaction.followup.send(
+                    embed=embed, file=chart, view=view, ephemeral=True
+                )
+            else:
+                await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+        except Exception:
+            logger.exception("Unhandled error in /ticket leaderboard")
+            await interaction.followup.send(
+                "An error occurred while fetching the leaderboard.", ephemeral=True
+            )
 
 
 class TicketTypeGroup(

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
+from loguru import logger
 
-from tickets.charts import build_leaderboard_chart, build_stats_chart
 from tickets.models.stats import HandlerStats, LeaderboardEntry
 
 if TYPE_CHECKING:
@@ -111,7 +111,12 @@ def _build_leaderboard_embed(
 
 
 class StatsView(discord.ui.View):
-    """Interactive view for /ticket stats — period select + chart type select."""
+    """Interactive view for /ticket stats — period select.
+
+    Updating the embed on period change. The chart image (sent with the
+    initial response) is preserved by discord.py automatically since
+    edit_message does not touch attachments unless explicitly instructed.
+    """
 
     def __init__(
         self,
@@ -126,39 +131,40 @@ class StatsView(discord.ui.View):
         self._display_name = display_name
         self._period = period
 
-        self._period_select = discord.ui.Select(
+        period_select = discord.ui.Select(
             placeholder="Period",
             options=_PERIOD_OPTIONS,
             row=0,
         )
-        self._period_select.callback = self._on_period_change
-        self.add_item(self._period_select)
+        period_select.callback = self._on_period_change
+        self.add_item(period_select)
 
     async def _on_period_change(self, interaction: discord.Interaction) -> None:
-        self._period = self._period_select.values[0]
-        await self._reload(interaction)
-
-    async def _reload(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
+        data: dict[str, Any] = interaction.data or {}  # type: ignore[assignment]
+        values: list[str] = data.get("values", [])
+        if not values:
+            await interaction.response.defer()
+            return
+        self._period = values[0]
         since = _parse_period(self._period)
-        stats = await self._service.get_handler_stats(self._staff_id, since)
-        if stats is None:
-            await interaction.edit_original_response(
-                content="No closed tickets found for this period.",
-                embed=None,
-                attachments=[],
-                view=self,
-            )
+
+        try:
+            stats = await self._service.get_handler_stats(self._staff_id, since)
+        except Exception as e:
+            logger.error(f"StatsView: get_handler_stats failed: {e}")
+            await interaction.response.defer()
             return
 
-        embed = _build_stats_embed(stats, self._display_name, self._period)
-        chart = build_stats_chart(stats, self._display_name)
-        await interaction.edit_original_response(
-            content=None,
-            embed=embed,
-            attachments=[chart],
-            view=self,
-        )
+        if stats is None:
+            embed = discord.Embed(
+                title=f"Ticket Stats — {self._display_name}",
+                description="No closed tickets found for this period.",
+                color=discord.Color.blurple(),
+            )
+        else:
+            embed = _build_stats_embed(stats, self._display_name, self._period)
+
+        await interaction.response.edit_message(embed=embed, view=self)
 
     async def on_timeout(self) -> None:
         for item in self.children:
@@ -167,7 +173,10 @@ class StatsView(discord.ui.View):
 
 
 class LeaderboardView(discord.ui.View):
-    """Interactive view for /ticket leaderboard — period select + metric select."""
+    """Interactive view for /ticket leaderboard — period select + metric select.
+
+    The chart image from the initial response is preserved automatically.
+    """
 
     def __init__(
         self,
@@ -180,15 +189,15 @@ class LeaderboardView(discord.ui.View):
         self._period = period
         self._metric = metric
 
-        self._period_select = discord.ui.Select(
+        period_select = discord.ui.Select(
             placeholder="Period",
             options=_PERIOD_OPTIONS,
             row=0,
         )
-        self._period_select.callback = self._on_period_change
-        self.add_item(self._period_select)
+        period_select.callback = self._on_period_change
+        self.add_item(period_select)
 
-        self._metric_select = discord.ui.Select(
+        metric_select = discord.ui.Select(
             placeholder="Metric",
             options=[
                 discord.SelectOption(label="Tickets Closed", value="closed"),
@@ -196,30 +205,39 @@ class LeaderboardView(discord.ui.View):
             ],
             row=1,
         )
-        self._metric_select.callback = self._on_metric_change
-        self.add_item(self._metric_select)
+        metric_select.callback = self._on_metric_change
+        self.add_item(metric_select)
 
-    async def _on_period_change(self, interaction: discord.Interaction) -> None:
-        self._period = self._period_select.values[0]
-        await self._reload(interaction)
-
-    async def _on_metric_change(self, interaction: discord.Interaction) -> None:
-        self._metric = self._metric_select.values[0]
-        await self._reload(interaction)
-
-    async def _reload(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
+    async def _fetch_and_edit(self, interaction: discord.Interaction) -> None:
         since = _parse_period(self._period)
-        entries = await self._service.get_leaderboard(since)
+        try:
+            entries = await self._service.get_leaderboard(since)
+        except Exception as e:
+            logger.error(f"LeaderboardView: get_leaderboard failed: {e}")
+            await interaction.response.defer()
+            return
+
         names = self._resolve_names(entries, interaction.guild)
         embed = _build_leaderboard_embed(entries, names, self._period, self._metric)
-        chart = build_leaderboard_chart(entries, names, self._metric)
-        await interaction.edit_original_response(
-            content=None,
-            embed=embed,
-            attachments=[chart],
-            view=self,
-        )
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def _on_period_change(self, interaction: discord.Interaction) -> None:
+        data: dict[str, Any] = interaction.data or {}  # type: ignore[assignment]
+        values: list[str] = data.get("values", [])
+        if not values:
+            await interaction.response.defer()
+            return
+        self._period = values[0]
+        await self._fetch_and_edit(interaction)
+
+    async def _on_metric_change(self, interaction: discord.Interaction) -> None:
+        data: dict[str, Any] = interaction.data or {}  # type: ignore[assignment]
+        values: list[str] = data.get("values", [])
+        if not values:
+            await interaction.response.defer()
+            return
+        self._metric = values[0]
+        await self._fetch_and_edit(interaction)
 
     def _resolve_names(
         self,
