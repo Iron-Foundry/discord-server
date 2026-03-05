@@ -202,37 +202,51 @@ class RoleService:
         to_add = desired - current
         to_remove = current - desired
 
+        if not to_add and not to_remove:
+            await interaction.followup.send("No changes made.", ephemeral=True)
+            return
+
+        roles_to_add = [r for rid in to_add if (r := self._guild.get_role(rid))]
+        roles_to_remove = [r for rid in to_remove if (r := self._guild.get_role(rid))]
+
         added: list[str] = []
         removed: list[str] = []
 
-        for role_id in to_add:
-            role = self._guild.get_role(role_id)
-            if role:
-                try:
-                    await member.add_roles(role, reason="Role panel selection")
-                    added.append(role.mention)
-                except discord.HTTPException:
-                    pass
+        if roles_to_add:
+            try:
+                await member.add_roles(*roles_to_add, reason="Role panel selection")
+                added = [r.mention for r in roles_to_add]
+            except discord.HTTPException as e:
+                logger.error(
+                    f"RolePanel: failed to add roles {[r.name for r in roles_to_add]} "
+                    f"to {member}: {e}"
+                )
 
-        for role_id in to_remove:
-            role = self._guild.get_role(role_id)
-            if role:
-                try:
-                    await member.remove_roles(role, reason="Role panel deselection")
-                    removed.append(role.mention)
-                except discord.HTTPException:
-                    pass
-
-        if not added and not removed:
-            await interaction.followup.send("No changes made.", ephemeral=True)
-            return
+        if roles_to_remove:
+            try:
+                await member.remove_roles(
+                    *roles_to_remove, reason="Role panel deselection"
+                )
+                removed = [r.mention for r in roles_to_remove]
+            except discord.HTTPException as e:
+                logger.error(
+                    f"RolePanel: failed to remove roles {[r.name for r in roles_to_remove]} "
+                    f"from {member}: {e}"
+                )
 
         parts: list[str] = []
         if added:
             parts.append(f"Added: {', '.join(added)}")
         if removed:
             parts.append(f"Removed: {', '.join(removed)}")
-        await interaction.followup.send("  ".join(parts), ephemeral=True)
+
+        if parts:
+            await interaction.followup.send("  ".join(parts), ephemeral=True)
+        else:
+            await interaction.followup.send(
+                "Could not apply role changes. Check that the bot role is above the panel roles in the server settings.",
+                ephemeral=True,
+            )
 
     async def handle_clear_all(
         self,
@@ -261,19 +275,17 @@ class RoleService:
             )
             return
 
-        removed: list[str] = []
-        for role in roles_to_remove:
-            try:
-                await member.remove_roles(role, reason="Role panel clear all")
-                removed.append(role.mention)
-            except discord.HTTPException:
-                pass
-
-        if removed:
+        try:
+            await member.remove_roles(*roles_to_remove, reason="Role panel clear all")
+            removed = [r.mention for r in roles_to_remove]
             await interaction.followup.send(
                 f"Cleared: {', '.join(removed)}", ephemeral=True
             )
-        else:
+        except discord.HTTPException as e:
+            logger.error(
+                f"RolePanel: failed to clear roles {[r.name for r in roles_to_remove]} "
+                f"from {member}: {e}"
+            )
             await interaction.followup.send("Could not remove roles.", ephemeral=True)
 
     # ------------------------------------------------------------------

@@ -31,11 +31,22 @@ class RankupModal(discord.ui.Modal, title="Rank Up Application"):
         self._callback = callback
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
         metadata = {
             "current_rank": self.current_rank.value,
             "target_rank": self.target_rank.value,
         }
-        await self._callback(interaction, metadata)
+        ticket = await self._callback(interaction, metadata)
+        if ticket:
+            await interaction.followup.send(
+                f"Your ticket has been created: {ticket.channel.mention}",
+                ephemeral=True,
+            )
+        else:
+            await interaction.followup.send(
+                "Failed to create your ticket. You may already have one open, or please try again.",
+                ephemeral=True,
+            )
 
 
 class RankupTicket(TicketTypeConfig):

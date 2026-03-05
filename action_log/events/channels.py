@@ -114,6 +114,74 @@ def register(registrar: EventRegistrar) -> None:
         logger.debug(f"ActionLog[channels]: #{after.name} updated — {lines}")
         await service.post(LogCategory.CHANNELS, embed)
 
+    async def on_stage_instance_create(stage: discord.StageInstance) -> None:
+        if stage.guild_id != service.guild.id:
+            return
+
+        embed = discord.Embed(
+            title="Stage Started",
+            color=CATEGORY_COLORS[LogCategory.CHANNELS],
+            timestamp=datetime.now(UTC),
+        )
+        embed.add_field(name="Topic", value=stage.topic, inline=False)
+        embed.add_field(name="Channel", value=f"<#{stage.channel_id}>", inline=True)
+        embed.add_field(
+            name="Privacy",
+            value=str(stage.privacy_level).replace("StagePrivacyLevel.", "").title(),
+            inline=True,
+        )
+        embed.set_footer(text=f"Stage ID: {stage.id}")
+        logger.debug(f"ActionLog[channels]: stage started — '{stage.topic}'")
+        await service.post(LogCategory.CHANNELS, embed)
+
+    async def on_stage_instance_update(
+        before: discord.StageInstance, after: discord.StageInstance
+    ) -> None:
+        if after.guild_id != service.guild.id:
+            return
+
+        lines: list[str] = []
+        if before.topic != after.topic:
+            lines.append(f"**Topic:** {before.topic} → {after.topic}")
+        if before.privacy_level != after.privacy_level:
+            lines.append(
+                f"**Privacy:** "
+                f"{str(before.privacy_level).replace('StagePrivacyLevel.', '').title()} → "
+                f"{str(after.privacy_level).replace('StagePrivacyLevel.', '').title()}"
+            )
+
+        if not lines:
+            return
+
+        embed = discord.Embed(
+            title="Stage Updated",
+            description="\n".join(lines),
+            color=CATEGORY_COLORS[LogCategory.CHANNELS],
+            timestamp=datetime.now(UTC),
+        )
+        embed.add_field(name="Channel", value=f"<#{after.channel_id}>", inline=True)
+        embed.set_footer(text=f"Stage ID: {after.id}")
+        logger.debug(f"ActionLog[channels]: stage updated — '{after.topic}'")
+        await service.post(LogCategory.CHANNELS, embed)
+
+    async def on_stage_instance_delete(stage: discord.StageInstance) -> None:
+        if stage.guild_id != service.guild.id:
+            return
+
+        embed = discord.Embed(
+            title="Stage Ended",
+            color=discord.Color.dark_gray(),
+            timestamp=datetime.now(UTC),
+        )
+        embed.add_field(name="Topic", value=stage.topic, inline=False)
+        embed.add_field(name="Channel", value=f"<#{stage.channel_id}>", inline=True)
+        embed.set_footer(text=f"Stage ID: {stage.id}")
+        logger.debug(f"ActionLog[channels]: stage ended — '{stage.topic}'")
+        await service.post(LogCategory.CHANNELS, embed)
+
     registrar.add("on_guild_channel_create", on_guild_channel_create)
     registrar.add("on_guild_channel_delete", on_guild_channel_delete)
     registrar.add("on_guild_channel_update", on_guild_channel_update)
+    registrar.add("on_stage_instance_create", on_stage_instance_create)
+    registrar.add("on_stage_instance_update", on_stage_instance_update)
+    registrar.add("on_stage_instance_delete", on_stage_instance_delete)

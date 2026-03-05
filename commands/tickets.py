@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import os
+
 import discord
 from discord import app_commands
 from typing import TYPE_CHECKING
 
 from commands.checks import handle_check_failure, is_senior_staff, is_staff
 from commands.help_registry import HelpEntry, HelpGroup, HelpRegistry
+from tickets.models.ticket import TicketStatus
 from tickets.views.ticket_tools import CloseReasonModal
 
 if TYPE_CHECKING:
@@ -45,6 +48,11 @@ def register_help(registry: HelpRegistry) -> None:
                     "/ticket list <user>",
                     "List a user's recent tickets",
                     "Staff",
+                ),
+                HelpEntry(
+                    "/ticket transcript <ticket_id>",
+                    "Get the transcript for a ticket (staff: any ticket; others: own only)",
+                    "Everyone",
                 ),
                 HelpEntry(
                     "/ticket panel <channel>",
@@ -90,6 +98,85 @@ class TicketGroup(
         self, interaction: discord.Interaction, error: app_commands.AppCommandError
     ) -> None:
         await handle_check_failure(interaction, error)
+
+    # ------------------------------------------------------------------
+    # /ticket transcript <ticket_id>
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="transcript", description="Get the transcript for a ticket"
+    )
+    @app_commands.describe(ticket_id="The ticket ID to fetch the transcript for")
+    async def transcript(
+        self, interaction: discord.Interaction, ticket_id: int
+    ) -> None:
+        from tickets.handlers.archive_channel import build_transcript_file
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        staff_role_id_str = os.getenv("STAFF_ROLE_ID")
+        caller_is_staff = (
+            isinstance(interaction.user, discord.Member)
+            and staff_role_id_str is not None
+            and any(r.id == int(staff_role_id_str) for r in interaction.user.roles)
+        )
+
+        record = await self._service.repo.get_ticket(ticket_id)
+        if not record or record.guild_id != self._service.guild.id:
+            await interaction.followup.send(
+                f"Ticket #{ticket_id:04d} not found.", ephemeral=True
+            )
+            return
+
+        if not caller_is_staff and record.creator.id != interaction.user.id:
+            await interaction.followup.send(
+                "You can only view transcripts for your own tickets.", ephemeral=True
+            )
+            return
+
+        ticket_type = self._service.type_registry.get(record.ticket_type)
+        if ticket_type and ticket_type.sensitive:
+            await interaction.followup.send(
+                "Transcripts are not stored for this ticket type.", ephemeral=True
+            )
+            return
+
+        if record.status == TicketStatus.OPEN:
+            await interaction.followup.send(
+                "This ticket is still open. Transcripts are saved when a ticket is closed.",
+                ephemeral=True,
+            )
+            return
+
+        saved_transcript = await self._service.repo.get_transcript(ticket_id)
+        if not saved_transcript:
+            await interaction.followup.send(
+                f"No transcript found for ticket #{ticket_id:04d}.", ephemeral=True
+            )
+            return
+
+        file = build_transcript_file(saved_transcript)
+        await interaction.followup.send(
+            f"Transcript for ticket **#{ticket_id:04d}**:",
+            file=file,
+            ephemeral=True,
+        )
+
+    @transcript.autocomplete("ticket_id")
+    async def transcript_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[int]]:
+        tickets = await self._service.get_closed_tickets_by_user(
+            interaction.user.id, limit=25
+        )
+        return [
+            app_commands.Choice(
+                name=f"#{t.ticket_id:04d} — {t.ticket_type.replace('_', ' ').title()}",
+                value=t.ticket_id,
+            )
+            for t in tickets
+            if not current or current in str(t.ticket_id)
+        ]
 
     # ------------------------------------------------------------------
     # /ticket panel <channel>

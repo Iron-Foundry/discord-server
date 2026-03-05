@@ -103,7 +103,6 @@ class DiscordClient(discord.Client):
             await self._init_services()
 
         # Run post-ready setup for services that need the populated guild cache
-        # (channel/member lookups, ticket recovery, archive handler registration).
         if self.ticket_service:
             await self.ticket_service.post_ready()
 

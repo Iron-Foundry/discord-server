@@ -47,80 +47,6 @@ class CloseReasonModal(discord.ui.Modal, title="Close Ticket"):
             )
 
 
-class AddUserModal(discord.ui.Modal, title="Add User to Ticket"):
-    user_input = discord.ui.TextInput(
-        label="User ID",
-        placeholder="Paste the user's Discord ID",
-        max_length=20,
-    )
-
-    def __init__(self, service: TicketService, ticket_id: int) -> None:
-        super().__init__()
-        self._service = service
-        self._ticket_id = ticket_id
-
-    async def on_submit(self, interaction: discord.Interaction) -> None:
-        if not interaction.guild:
-            await interaction.response.send_message(
-                "This can only be used in a server.", ephemeral=True
-            )
-            return
-        try:
-            user_id = int(self.user_input.value.strip().lstrip("<@!").rstrip(">"))
-            member = interaction.guild.get_member(user_id)
-            if not member:
-                await interaction.response.send_message(
-                    "User not found in this server.", ephemeral=True
-                )
-                return
-            success = await self._service.add_user(self._ticket_id, member)
-            msg = (
-                f"Added {member.mention} to the ticket."
-                if success
-                else "Failed to add user."
-            )
-            await interaction.response.send_message(msg, ephemeral=True)
-        except ValueError:
-            await interaction.response.send_message("Invalid user ID.", ephemeral=True)
-
-
-class RemoveUserModal(discord.ui.Modal, title="Remove User from Ticket"):
-    user_input = discord.ui.TextInput(
-        label="User ID",
-        placeholder="Paste the user's Discord ID",
-        max_length=20,
-    )
-
-    def __init__(self, service: TicketService, ticket_id: int) -> None:
-        super().__init__()
-        self._service = service
-        self._ticket_id = ticket_id
-
-    async def on_submit(self, interaction: discord.Interaction) -> None:
-        if not interaction.guild:
-            await interaction.response.send_message(
-                "This can only be used in a server.", ephemeral=True
-            )
-            return
-        try:
-            user_id = int(self.user_input.value.strip().lstrip("<@!").rstrip(">"))
-            member = interaction.guild.get_member(user_id)
-            if not member:
-                await interaction.response.send_message(
-                    "User not found in this server.", ephemeral=True
-                )
-                return
-            success = await self._service.remove_user(self._ticket_id, member)
-            msg = (
-                f"Removed {member.mention} from the ticket."
-                if success
-                else "Failed to remove user."
-            )
-            await interaction.response.send_message(msg, ephemeral=True)
-        except ValueError:
-            await interaction.response.send_message("Invalid user ID.", ephemeral=True)
-
-
 class TicketToolsView(discord.ui.View):
     """Moderator tools panel that can be spawned inside any open ticket channel."""
 
@@ -187,42 +113,12 @@ class TicketToolsView(discord.ui.View):
                 "Timeout frozen — ticket won't auto-close.", ephemeral=True
             )
 
-    @discord.ui.button(
-        label="Add User",
-        style=discord.ButtonStyle.secondary,
-        emoji="➕",
-        row=1,
-    )
-    async def add_user_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
-        ticket = await self._get_ticket(interaction)
-        if not ticket:
-            return
-        await interaction.response.send_modal(
-            AddUserModal(self._service, ticket.ticket_id)
-        )
-
-    @discord.ui.button(
-        label="Remove User",
-        style=discord.ButtonStyle.secondary,
-        emoji="➖",
-        row=1,
-    )
-    async def remove_user_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
-        ticket = await self._get_ticket(interaction)
-        if not ticket:
-            return
-        await interaction.response.send_modal(
-            RemoveUserModal(self._service, ticket.ticket_id)
-        )
-
-
 def build_tools_embed() -> discord.Embed:
     return discord.Embed(
         title="🛠️ Ticket Tools",
-        description="Staff tools for managing this ticket.",
+        description=(
+            "Staff tools for managing this ticket.\n"
+            "Use `/ticket add` and `/ticket remove` to manage members."
+        ),
         color=discord.Color.orange(),
     )

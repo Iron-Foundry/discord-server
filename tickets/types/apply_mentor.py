@@ -36,12 +36,23 @@ class ApplyMentorModal(discord.ui.Modal, title="Mentor Application"):
         self._callback = callback
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
         metadata = {
             "rsn": self.rsn.value,
             "experience": self.experience.value,
             "reason": self.reason.value,
         }
-        await self._callback(interaction, metadata)
+        ticket = await self._callback(interaction, metadata)
+        if ticket:
+            await interaction.followup.send(
+                f"Your ticket has been created: {ticket.channel.mention}",
+                ephemeral=True,
+            )
+        else:
+            await interaction.followup.send(
+                "Failed to create your ticket. You may already have one open, or please try again.",
+                ephemeral=True,
+            )
 
 
 class ApplyMentorTicket(TicketTypeConfig):

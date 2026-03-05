@@ -37,7 +37,7 @@ def register_help(registry: HelpRegistry) -> None:
                 ),
                 HelpEntry(
                     "/rolepanel edit <panel_id>",
-                    "Edit a panel's title or description",
+                    "Edit a panel's title or description via a modal",
                     "Senior Staff",
                 ),
                 HelpEntry(
@@ -132,34 +132,21 @@ class RolePanelGroup(
     # ------------------------------------------------------------------
 
     @app_commands.command(
-        name="edit", description="Edit a panel's title or description"
+        name="edit", description="Edit a panel's title or description via a modal"
     )
-    @app_commands.describe(
-        panel_id="Panel to edit",
-        title="New title",
-        description="New description",
-    )
+    @app_commands.describe(panel_id="Panel to edit")
     @is_senior_staff()
     async def edit(
         self,
         interaction: discord.Interaction,
         panel_id: str,
-        title: str | None = None,
-        description: str | None = None,
     ) -> None:
-        if title is None and description is None:
-            await interaction.response.send_message(
-                "Provide at least one of `title` or `description`.", ephemeral=True
-            )
+        panel = self._service.get_panel(panel_id)
+        if panel is None:
+            await interaction.response.send_message("Panel not found.", ephemeral=True)
             return
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        success = await self._service.edit_panel(
-            panel_id, title=title, description=description
-        )
-        if success:
-            await interaction.followup.send("Panel updated.", ephemeral=True)
-        else:
-            await interaction.followup.send("Panel not found.", ephemeral=True)
+        modal = PanelEditModal(self._service, panel_id, panel.title, panel.description)
+        await interaction.response.send_modal(modal)
 
     @edit.autocomplete("panel_id")
     async def edit_autocomplete(
@@ -407,6 +394,53 @@ class RolePanelGroup(
                 )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+# ------------------------------------------------------------------
+# Modal for editing panel title / description
+# ------------------------------------------------------------------
+
+
+class PanelEditModal(discord.ui.Modal, title="Edit Role Panel"):
+    """Modal for editing a role panel's title and description."""
+
+    panel_title = discord.ui.TextInput(
+        label="Title",
+        placeholder="Panel title",
+        max_length=100,
+    )
+    description = discord.ui.TextInput(
+        label="Description",
+        placeholder="Describe this panel...",
+        style=discord.TextStyle.paragraph,
+        required=False,
+        max_length=2000,
+    )
+
+    def __init__(
+        self,
+        service: RoleService,
+        panel_id: str,
+        current_title: str,
+        current_description: str,
+    ) -> None:
+        super().__init__()
+        self._service = service
+        self._panel_id = panel_id
+        self.panel_title.default = current_title
+        self.description.default = current_description or ""
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        success = await self._service.edit_panel(
+            self._panel_id,
+            title=self.panel_title.value,
+            description=self.description.value,
+        )
+        if success:
+            await interaction.followup.send("Panel updated.", ephemeral=True)
+        else:
+            await interaction.followup.send("Panel not found.", ephemeral=True)
 
 
 # ------------------------------------------------------------------

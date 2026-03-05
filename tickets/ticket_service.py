@@ -172,9 +172,9 @@ class TicketService:
             if t.record.creator.id == creator.id and t.record.ticket_type == type_id
         ]
         if len(existing) >= ticket_type.max_open_per_user:
-            await interaction.followup.send(
-                f"You already have an open **{ticket_type.display_name}** ticket.",
-                ephemeral=True,
+            logger.debug(
+                f"create_ticket: {creator} already has {len(existing)} open "
+                f"'{type_id}' ticket(s) — rejecting"
             )
             return None
 
@@ -285,7 +285,18 @@ class TicketService:
                 dm_lines.append(
                     "\nTo reopen, use `/ticket reopen` with your ticket ID."
                 )
-                await creator_user.send("\n".join(dm_lines))
+                dm_text = "\n".join(dm_lines)
+
+                has_transcript = (
+                    not ticket.ticket_type.sensitive and ticket.transcript.entries
+                )
+                if has_transcript:
+                    from tickets.handlers.archive_channel import build_transcript_file
+
+                    file = build_transcript_file(ticket.transcript)
+                    await creator_user.send(dm_text, file=file)
+                else:
+                    await creator_user.send(dm_text)
                 logger.debug(f"Ticket #{ticket_id}: close DM sent to {creator_user}")
             except (discord.Forbidden, discord.HTTPException) as e:
                 logger.warning(
