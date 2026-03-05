@@ -33,15 +33,17 @@ class ReopenView(discord.ui.View):
             )
             return
         await interaction.response.defer(ephemeral=True, thinking=True)
-        success = await self._service.reopen_ticket(
+        new_channel = await self._service.reopen_ticket(
             ticket_id=self._ticket_id,
             reopener=interaction.user,
         )
-        if success:
+        if new_channel:
             button.disabled = True
             if interaction.message:
                 await interaction.message.edit(view=self)
-            await interaction.followup.send("Ticket reopened.", ephemeral=True)
+            await interaction.followup.send(
+                f"Ticket reopened in {new_channel.mention}.", ephemeral=True
+            )
         else:
             await interaction.followup.send(
                 "Failed to reopen the ticket.", ephemeral=True

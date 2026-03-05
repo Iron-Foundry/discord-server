@@ -10,6 +10,7 @@ from loguru import logger
 from tickets.handlers.archive_channel import ArchiveChannelTicketRepository
 from tickets.handlers.database import MongoTicketRepository
 from tickets.models.ticket import (
+    ReopenEvent,
     Ticket,
     TicketRecord,
     TicketStatus,
@@ -53,6 +54,7 @@ class TicketService:
         }
         self._panel_channel: discord.TextChannel | None = None
         self._panel_message: discord.Message | None = None
+        self._panel_category: discord.CategoryChannel | None = None
         self._closed_tickets: dict[int, Ticket] = {}
 
     # -------------------------------------------------------------------------
@@ -115,10 +117,14 @@ class TicketService:
         from tickets.views.panel import TicketPanelView, build_panel_embed
 
         self._panel_channel = channel
+        self._panel_category = channel.category
         embed = build_panel_embed(self.guild)
         view = TicketPanelView(self)
         self._panel_message = await channel.send(embed=embed, view=view)
-        logger.info(f"Panel posted to #{channel.name}")
+        logger.info(
+            f"Panel posted to #{channel.name} "
+            f"(category: {channel.category.name if channel.category else 'none'})"
+        )
 
     async def refresh_panel(self) -> None:
         """Rebuild the panel select menu to reflect current enabled types."""
@@ -173,8 +179,14 @@ class TicketService:
             ticket_id = await self.repo.next_ticket_id()
             now = datetime.now(UTC)
 
-            # Resolve or create category
-            category = await self._get_or_create_category(ticket_type.category_name)
+            # Use the panel's category so all tickets land under the same category
+            category = self._panel_category or await self._get_or_create_category(
+                ticket_type.category_name
+            )
+            logger.debug(
+                f"Ticket #{ticket_id}: using category '{category.name}' "
+                f"({'panel' if self._panel_category else 'fallback'})"
+            )
             channel_name = f"{ticket_type.channel_prefix}-{ticket_id:04d}"
             overwrites = ticket_type.get_channel_permissions(self.guild, creator)
 
@@ -232,35 +244,52 @@ class TicketService:
         reason: str | None,
         note: str | None,
     ) -> bool:
-        """Collect transcript, persist, DM the creator, lock channel, post reopen view."""
+        """Collect transcript, persist, DM the creator, then delete the channel."""
         ticket = self._get_by_ticket_id(ticket_id)
         if not ticket:
-            logger.error(f"close_ticket: ticket #{ticket_id} not found")
+            logger.error(
+                f"close_ticket: ticket #{ticket_id} not found in active tickets"
+            )
             return False
 
         try:
+            logger.info(
+                f"Ticket #{ticket_id}: closing — closer={closer}, reason={reason!r}"
+            )
+
             await self._cancel_timeout(ticket_id)
+
+            # Collect the full message history before anything is altered
+            logger.debug(f"Ticket #{ticket_id}: collecting message history")
             await ticket.collect_messages()
             await ticket.close(closer, reason, note)
+            logger.debug(
+                f"Ticket #{ticket_id}: {len(ticket.transcript.entries)} messages collected"
+            )
 
             # DM the ticket creator
-            if reason:
-                try:
-                    creator_user = await self.guild.fetch_member(
-                        ticket.record.creator.id
-                    )
-                    await creator_user.send(
-                        f"**Your ticket #{ticket_id:04d} has been closed.**\n\n"
-                        f"**Reason:** {reason}"
-                    )
-                except (discord.Forbidden, discord.HTTPException):
-                    logger.warning(f"Could not DM creator of ticket #{ticket_id}")
+            try:
+                creator_user = await self.guild.fetch_member(ticket.record.creator.id)
+                dm_lines = [f"**Your ticket #{ticket_id:04d} has been closed.**"]
+                if reason:
+                    dm_lines.append(f"\n**Reason:** {reason}")
+                dm_lines.append(
+                    "\nTo reopen, use `/ticket reopen` with your ticket ID."
+                )
+                await creator_user.send("\n".join(dm_lines))
+                logger.debug(f"Ticket #{ticket_id}: close DM sent to {creator_user}")
+            except (discord.Forbidden, discord.HTTPException) as e:
+                logger.warning(
+                    f"Ticket #{ticket_id}: could not DM creator "
+                    f"{ticket.record.creator.id}: {e}"
+                )
 
-            # Save transcript via all handlers
+            # Save transcript via all active handlers
+            logger.debug(f"Ticket #{ticket_id}: saving transcript")
             for handler in self._active_handlers():
                 await handler.save_transcript(ticket.transcript)
 
-            # Update DB record
+            # Persist status update
             await self.repo.update_ticket(
                 ticket_id,
                 status=TicketStatus.CLOSED.value,
@@ -272,99 +301,136 @@ class TicketService:
                 staff_note=note,
             )
 
-            # Lock the channel (deny send_messages for @everyone and the creator)
-            await ticket.channel.set_permissions(
-                self.guild.default_role, send_messages=False, view_channel=False
-            )
-            if ticket.creator:
-                await ticket.channel.set_permissions(
-                    ticket.creator,
-                    send_messages=False,
-                    view_channel=True,
-                    read_message_history=True,
+            # Delete the channel — transcript is already saved
+            channel_name = ticket.channel.name
+            try:
+                await ticket.channel.delete(
+                    reason=f"Ticket #{ticket_id:04d} closed by {closer.display_name}"
+                )
+                logger.debug(f"Ticket #{ticket_id}: channel #{channel_name} deleted")
+            except discord.HTTPException as e:
+                logger.warning(
+                    f"Ticket #{ticket_id}: could not delete channel "
+                    f"#{channel_name}: {e}"
                 )
 
-            # Post closed embed + reopen view
-            from tickets.views.reopen import ReopenView, build_closed_embed
-
-            closed_embed = build_closed_embed(ticket_id, closer, reason)
-            reopen_view = ReopenView(self, ticket_id)
-            await ticket.channel.send(embed=closed_embed, view=reopen_view)
-
-            # Remove from active tracking (but keep channel so reopen works)
-            del self.active_tickets[ticket.channel.id]
+            # Move from active → closed tracking
+            self.active_tickets.pop(ticket.channel.id, None)
             self._closed_tickets[ticket_id] = ticket
 
-            logger.info(f"Ticket #{ticket_id} closed by {closer}")
+            logger.info(
+                f"Ticket #{ticket_id} closed by {closer} (channel #{channel_name} deleted)"
+            )
             return True
 
         except Exception as e:
             logger.exception(f"Failed to close ticket #{ticket_id}: {e}")
             return False
 
-    async def reopen_ticket(self, ticket_id: int, reopener: discord.Member) -> bool:
-        """Restore channel permissions and restart the timeout."""
-        closed = self._closed_tickets
-        ticket = closed.get(ticket_id)
-        if not ticket:
-            # Try to reconstruct from DB
+    async def reopen_ticket(
+        self, ticket_id: int, reopener: discord.Member
+    ) -> discord.TextChannel | None:
+        """Create a new channel for a closed ticket and post the prior transcript."""
+        # Get record from in-memory cache or DB
+        cached = self._closed_tickets.get(ticket_id)
+        if cached:
+            record = cached.record
+            ticket_type = cached.ticket_type
+        else:
             record = await self.repo.get_ticket(ticket_id)
             if not record or record.status != TicketStatus.CLOSED:
                 logger.error(
                     f"reopen_ticket: ticket #{ticket_id} not found or not closed"
                 )
-                return False
-            channel = self.guild.get_channel(record.channel_id)
-            if not isinstance(channel, discord.TextChannel):
-                return False
+                return None
             ticket_type = self.type_registry.get(record.ticket_type)
             if not ticket_type:
-                return False
-            creator_member = self.guild.get_member(record.creator.id)
-            ticket = Ticket.from_record(record, channel, ticket_type, creator_member)
+                logger.error(
+                    f"reopen_ticket: unknown type '{record.ticket_type}' "
+                    f"for ticket #{ticket_id}"
+                )
+                return None
 
         try:
-            await ticket.reopen(reopener)
+            logger.info(f"Ticket #{ticket_id}: reopening by {reopener}")
 
-            # Restore channel permissions
-            creator = self.guild.get_member(ticket.record.creator.id)
-            overwrites = ticket.ticket_type.get_channel_permissions(
-                self.guild, creator or reopener
+            # Create a new channel in the panel's category (original channel is deleted)
+            category = self._panel_category or await self._get_or_create_category(
+                ticket_type.category_name
             )
-            for target, overwrite in overwrites.items():
-                if isinstance(target, (discord.Role, discord.Member)):
-                    await ticket.channel.set_permissions(target, overwrite=overwrite)
+            channel_name = f"{ticket_type.channel_prefix}-{ticket_id:04d}"
+            creator_member = self.guild.get_member(record.creator.id)
+            overwrites = ticket_type.get_channel_permissions(
+                self.guild, creator_member or reopener
+            )
+            new_channel = await category.create_text_channel(
+                name=channel_name, overwrites=overwrites
+            )
+            logger.info(
+                f"Ticket #{ticket_id}: new channel #{new_channel.name} "
+                f"created under '{category.name}'"
+            )
+
+            # Post prior transcript file
+            prior_transcript = await self.repo.get_transcript(ticket_id)
+            if prior_transcript:
+                from tickets.handlers.archive_channel import build_transcript_file
+
+                file = build_transcript_file(prior_transcript)
+                await new_channel.send(
+                    content="**Prior conversation transcript:**", file=file
+                )
+                logger.debug(f"Ticket #{ticket_id}: prior transcript posted")
+            else:
+                logger.warning(f"Ticket #{ticket_id}: no prior transcript found in DB")
+
+            # Update the record in place
+            now = datetime.now(UTC)
+            record.status = TicketStatus.OPEN
+            record.closed_at = None
+            record.closed_by_id = None
+            record.close_reason = None
+            record.staff_note = None
+            record.reopen_history.append(ReopenEvent(reopened_by_id=reopener.id))
+            record.last_message_at = now
+            record.channel_id = new_channel.id
 
             await self.repo.update_ticket(
                 ticket_id,
                 status=TicketStatus.OPEN.value,
+                channel_id=new_channel.id,
                 closed_at=None,
                 closed_by_id=None,
                 close_reason=None,
+                staff_note=None,
                 reopen_history=[
-                    e.model_dump(mode="json") for e in ticket.record.reopen_history
+                    e.model_dump(mode="json") for e in record.reopen_history
                 ],
+                last_message_at=now.isoformat(),
             )
 
             # Post reopen embed
-            reopen_embed = ticket.ticket_type.build_reopen_embed(
-                ticket.record, reopener
+            reopen_embed = ticket_type.build_reopen_embed(record, reopener)
+            await new_channel.send(embed=reopen_embed)
+
+            # Register as active ticket
+            new_ticket = Ticket.from_record(
+                record, new_channel, ticket_type, creator_member
             )
-            await ticket.channel.send(embed=reopen_embed)
+            self.active_tickets[new_channel.id] = new_ticket
+            self._closed_tickets.pop(ticket_id, None)
 
-            self.active_tickets[ticket.channel.id] = ticket
-            if ticket_id in closed:
-                del closed[ticket_id]
+            self._schedule_timeout(new_ticket, TICKET_TIMEOUT_SECONDS)
+            await ticket_type.on_reopened(record, reopener)
 
-            self._schedule_timeout(ticket, TICKET_TIMEOUT_SECONDS)
-
-            await ticket.ticket_type.on_reopened(ticket.record, reopener)
-            logger.info(f"Ticket #{ticket_id} reopened by {reopener}")
-            return True
+            logger.info(
+                f"Ticket #{ticket_id} reopened by {reopener} in #{new_channel.name}"
+            )
+            return new_channel
 
         except Exception as e:
             logger.exception(f"Failed to reopen ticket #{ticket_id}: {e}")
-            return False
+            return None
 
     # -------------------------------------------------------------------------
     # Ticket management

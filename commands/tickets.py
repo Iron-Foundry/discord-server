@@ -306,17 +306,19 @@ class TicketGroup(
             )
             return
         await interaction.response.defer(ephemeral=True, thinking=True)
-        success = await self._service.reopen_ticket(
+        new_channel = await self._service.reopen_ticket(
             ticket_id=ticket_id,
             reopener=interaction.user,
         )
-        if success:
+        if new_channel:
             await interaction.followup.send(
-                f"Ticket #{ticket_id:04d} has been reopened.", ephemeral=True
+                f"Ticket #{ticket_id:04d} has been reopened in {new_channel.mention}.",
+                ephemeral=True,
             )
         else:
             await interaction.followup.send(
-                f"Could not reopen ticket #{ticket_id:04d}. It may not exist or may not be closed.",
+                f"Could not reopen ticket #{ticket_id:04d}. "
+                "It may not exist or may not be closed.",
                 ephemeral=True,
             )
 

@@ -150,3 +150,8 @@ class ActionLogService:
     def config(self) -> ActionLogConfig | None:
         """Current action log config, or None if not yet configured."""
         return self._config
+
+    @property
+    def guild(self) -> discord.Guild:
+        """The guild this action log monitors."""
+        return self._guild

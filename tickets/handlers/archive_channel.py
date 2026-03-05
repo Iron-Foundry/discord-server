@@ -7,6 +7,12 @@ from loguru import logger
 from tickets.models.transcript import Transcript
 
 
+def build_transcript_file(transcript: Transcript) -> discord.File:
+    """Build a discord.File containing the plaintext transcript log."""
+    buf = io.BytesIO(transcript.to_text().encode("utf-8"))
+    return discord.File(buf, filename=f"ticket-{transcript.ticket_id:04d}.txt")
+
+
 class ArchiveChannelTicketRepository:
     """
     TranscriptHandler that posts a summary embed and full message log
@@ -69,30 +75,4 @@ class ArchiveChannelTicketRepository:
         return embed
 
     def _build_file(self, transcript: Transcript) -> discord.File:
-        lines: list[str] = [
-            f"Ticket #{transcript.ticket_id:04d} — {transcript.ticket_type.replace('_', ' ').title()}",
-            f"Created:  {transcript.created_at.strftime('%Y-%m-%d %H:%M UTC')}",
-            f"Closed:   {transcript.closed_at.strftime('%Y-%m-%d %H:%M UTC') if transcript.closed_at else '—'}",
-            f"Duration: {transcript.get_duration()}",
-            "=" * 60,
-            "",
-        ]
-
-        for entry in transcript.entries:
-            ts = entry.timestamp.strftime("%H:%M")
-            prefix = "[BOT]" if entry.author_is_bot else ""
-            lines.append(f"[{ts}] {prefix}{entry.author_display_name}: {entry.content}")
-            for att in entry.attachments:
-                lines.append(f"         📎 {att.filename} — {att.url}")
-
-        if transcript.staff_actions:
-            lines += ["", "=" * 60, "Staff Actions", ""]
-            for action in transcript.staff_actions:
-                ts = action.timestamp.strftime("%Y-%m-%d %H:%M UTC")
-                lines.append(f"[{ts}] {action.actor_name}: {action.action}")
-                if action.note:
-                    lines.append(f"         Note: {action.note}")
-
-        content = "\n".join(lines)
-        buf = io.BytesIO(content.encode("utf-8"))
-        return discord.File(buf, filename=f"ticket-{transcript.ticket_id:04d}.txt")
+        return build_transcript_file(transcript)
