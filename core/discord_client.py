@@ -102,13 +102,17 @@ class DiscordClient(discord.Client):
         if not self._services_loaded and self._guild:
             await self._init_services()
 
+        # Run post-ready setup for services that need the populated guild cache
+        # (channel/member lookups, ticket recovery, archive handler registration).
+        if self.ticket_service:
+            await self.ticket_service.post_ready()
+
         logger.info(await self.command_handler.sync())
 
     def _refresh_service_guilds(self, guild: discord.Guild) -> None:
         """Propagate the live gateway guild to all already-loaded services."""
         if self.ticket_service:
             self.ticket_service.guild = guild
-            self.ticket_service.try_register_archive_handler()
         if self.role_service:
             self.role_service._guild = guild
         if self.action_log_service:

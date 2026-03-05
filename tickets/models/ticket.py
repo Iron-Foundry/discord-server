@@ -140,6 +140,11 @@ class TicketTypeConfig(ABC):
         """Max concurrent open tickets a single user may have of this type."""
         return 1
 
+    @property
+    def sensitive(self) -> bool:
+        """If True, no transcript is collected or persisted for privacy."""
+        return False
+
     # --- Select menu ---
 
     def build_select_option(self) -> discord.SelectOption:

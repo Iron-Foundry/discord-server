@@ -46,6 +46,10 @@ class SensitiveTicket(TicketTypeConfig):
         return "sensitive"
 
     @property
+    def sensitive(self) -> bool:
+        return True
+
+    @property
     def category_name(self) -> str:
         return "Sensitive"
 

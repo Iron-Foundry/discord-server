@@ -62,16 +62,19 @@ class TicketService:
     # -------------------------------------------------------------------------
 
     async def initialize(self) -> None:
-        """Load open tickets from MongoDB and resume their timeout tasks."""
+        """Set up MongoDB indexes. Safe to call before the guild cache is populated."""
         await self.repo.ensure_indexes()
-        archive = self._get_archive_channel()
-        if archive:
-            self.register_handler(
-                "archive_channel", ArchiveChannelTicketRepository(archive)
-            )
-            logger.info(f"ArchiveChannelTicketRepository registered → #{archive.name}")
+
+    async def post_ready(self) -> None:
+        """Register the archive handler and recover open tickets.
+
+        Must be called from on_ready, after the guild cache is fully populated.
+        """
+        self.try_register_archive_handler()
+
         records = await self.repo.get_open_tickets(self.guild.id)
         now = datetime.now(UTC)
+        recovered = 0
 
         for record in records:
             channel = self.guild.get_channel(record.channel_id)
@@ -81,7 +84,6 @@ class TicketService:
                 )
                 continue
 
-            # We can't re-fetch the live Member easily here; create a stub
             creator = self.guild.get_member(record.creator.id)
             ticket_type = self.type_registry.get(record.ticket_type)
             if not ticket_type:
@@ -92,6 +94,7 @@ class TicketService:
 
             ticket = Ticket.from_record(record, channel, ticket_type, creator)
             self.active_tickets[channel.id] = ticket
+            recovered += 1
 
             if not record.timeout_frozen:
                 elapsed = (
@@ -106,7 +109,7 @@ class TicketService:
                 else:
                     self._schedule_timeout(ticket, remaining)
 
-        logger.info(f"TicketService: recovered {len(self.active_tickets)} open tickets")
+        logger.info(f"TicketService: recovered {recovered} open tickets")
 
     # -------------------------------------------------------------------------
     # Panel
@@ -259,13 +262,19 @@ class TicketService:
 
             await self._cancel_timeout(ticket_id)
 
-            # Collect the full message history before anything is altered
-            logger.debug(f"Ticket #{ticket_id}: collecting message history")
-            await ticket.collect_messages()
-            await ticket.close(closer, reason, note)
-            logger.debug(
-                f"Ticket #{ticket_id}: {len(ticket.transcript.entries)} messages collected"
-            )
+            # Collect message history (skipped for sensitive tickets)
+            if ticket.ticket_type.sensitive:
+                logger.info(
+                    f"Ticket #{ticket_id}: sensitive — skipping transcript collection"
+                )
+                await ticket.close(closer, reason, note)
+            else:
+                logger.debug(f"Ticket #{ticket_id}: collecting message history")
+                await ticket.collect_messages()
+                await ticket.close(closer, reason, note)
+                logger.debug(
+                    f"Ticket #{ticket_id}: {len(ticket.transcript.entries)} messages collected"
+                )
 
             # DM the ticket creator
             try:
@@ -284,10 +293,11 @@ class TicketService:
                     f"{ticket.record.creator.id}: {e}"
                 )
 
-            # Save transcript via all active handlers
-            logger.debug(f"Ticket #{ticket_id}: saving transcript")
-            for handler in self._active_handlers():
-                await handler.save_transcript(ticket.transcript)
+            # Save transcript via all active handlers (skipped for sensitive tickets)
+            if not ticket.ticket_type.sensitive:
+                logger.debug(f"Ticket #{ticket_id}: saving transcript")
+                for handler in self._active_handlers():
+                    await handler.save_transcript(ticket.transcript)
 
             # Persist status update
             await self.repo.update_ticket(
@@ -371,18 +381,25 @@ class TicketService:
                 f"created under '{category.name}'"
             )
 
-            # Post prior transcript file
-            prior_transcript = await self.repo.get_transcript(ticket_id)
-            if prior_transcript:
-                from tickets.handlers.archive_channel import build_transcript_file
-
-                file = build_transcript_file(prior_transcript)
-                await new_channel.send(
-                    content="**Prior conversation transcript:**", file=file
+            # Post prior transcript file (skipped for sensitive tickets)
+            if ticket_type.sensitive:
+                logger.info(
+                    f"Ticket #{ticket_id}: sensitive — skipping prior transcript post"
                 )
-                logger.debug(f"Ticket #{ticket_id}: prior transcript posted")
             else:
-                logger.warning(f"Ticket #{ticket_id}: no prior transcript found in DB")
+                prior_transcript = await self.repo.get_transcript(ticket_id)
+                if prior_transcript:
+                    from tickets.handlers.archive_channel import build_transcript_file
+
+                    file = build_transcript_file(prior_transcript)
+                    await new_channel.send(
+                        content="**Prior conversation transcript:**", file=file
+                    )
+                    logger.debug(f"Ticket #{ticket_id}: prior transcript posted")
+                else:
+                    logger.warning(
+                        f"Ticket #{ticket_id}: no prior transcript found in DB"
+                    )
 
             # Update the record in place
             now = datetime.now(UTC)
