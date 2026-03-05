@@ -113,6 +113,7 @@ class TicketToolsView(discord.ui.View):
                 "Timeout frozen — ticket won't auto-close.", ephemeral=True
             )
 
+
 def build_tools_embed() -> discord.Embed:
     return discord.Embed(
         title="🛠️ Ticket Tools",

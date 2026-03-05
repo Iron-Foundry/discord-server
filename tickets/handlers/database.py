@@ -1,7 +1,10 @@
+from datetime import datetime
+
 from loguru import logger
-from pymongo import AsyncMongoClient, ASCENDING, DESCENDING
+from pymongo import ASCENDING, DESCENDING, AsyncMongoClient
 from pymongo.errors import PyMongoError
 
+from tickets.models.stats import HandlerStats, LeaderboardEntry
 from tickets.models.ticket import TicketRecord, TicketStatus
 from tickets.models.transcript import Transcript
 
@@ -148,3 +151,187 @@ class MongoTicketRepository:
         except PyMongoError as e:
             logger.error(f"Failed to fetch transcript for ticket #{ticket_id}: {e}")
             return None
+
+    # -------------------------------------------------------------------------
+    # Stats aggregations
+    # -------------------------------------------------------------------------
+
+    async def get_handler_stats(
+        self,
+        guild_id: int,
+        staff_id: int,
+        since: datetime | None = None,
+    ) -> HandlerStats | None:
+        """Return aggregated stats for a single staff handler."""
+        match: dict = {
+            "guild_id": guild_id,
+            "status": {"$in": [TicketStatus.CLOSED.value, TicketStatus.ARCHIVED.value]},
+            "closed_by_id": staff_id,
+        }
+        if since is not None:
+            match["created_at"] = {"$gte": since.isoformat()}
+
+        pipeline = [
+            {"$match": match},
+            {
+                "$facet": {
+                    "totals": [
+                        {
+                            "$group": {
+                                "_id": None,
+                                "tickets_closed": {"$sum": 1},
+                                "avg_resolution_ms": {
+                                    "$avg": {
+                                        "$cond": [
+                                            {
+                                                "$and": [
+                                                    {"$ne": ["$closed_at", None]},
+                                                    {"$ne": ["$created_at", None]},
+                                                ]
+                                            },
+                                            {
+                                                "$subtract": [
+                                                    {"$toDate": "$closed_at"},
+                                                    {"$toDate": "$created_at"},
+                                                ]
+                                            },
+                                            None,
+                                        ]
+                                    }
+                                },
+                                "avg_response_ms": {
+                                    "$avg": {
+                                        "$cond": [
+                                            {
+                                                "$and": [
+                                                    {
+                                                        "$ne": [
+                                                            "$first_staff_response_at",
+                                                            None,
+                                                        ]
+                                                    },
+                                                    {"$ne": ["$created_at", None]},
+                                                ]
+                                            },
+                                            {
+                                                "$subtract": [
+                                                    {
+                                                        "$toDate": "$first_staff_response_at"
+                                                    },
+                                                    {"$toDate": "$created_at"},
+                                                ]
+                                            },
+                                            None,
+                                        ]
+                                    }
+                                },
+                            }
+                        }
+                    ],
+                    "type_breakdown": [
+                        {"$group": {"_id": "$ticket_type", "count": {"$sum": 1}}}
+                    ],
+                }
+            },
+        ]
+
+        try:
+            cursor = await self._tickets.aggregate(pipeline)
+            result = await cursor.to_list(length=1)
+            if not result:
+                return None
+
+            facet = result[0]
+            totals_list: list[dict] = facet.get("totals", [])
+            if not totals_list or totals_list[0].get("tickets_closed", 0) == 0:
+                return None
+
+            totals = totals_list[0]
+            type_breakdown = {
+                doc["_id"]: doc["count"]
+                for doc in facet.get("type_breakdown", [])
+                if doc.get("_id") is not None
+            }
+
+            avg_res_ms = totals.get("avg_resolution_ms")
+            avg_resp_ms = totals.get("avg_response_ms")
+
+            return HandlerStats(
+                staff_id=staff_id,
+                tickets_closed=totals["tickets_closed"],
+                avg_response_seconds=avg_resp_ms / 1000 if avg_resp_ms else None,
+                avg_resolution_seconds=avg_res_ms / 1000 if avg_res_ms else None,
+                type_breakdown=type_breakdown,
+            )
+        except PyMongoError as e:
+            logger.error(f"get_handler_stats failed for staff {staff_id}: {e}")
+            return None
+
+    async def get_leaderboard_stats(
+        self,
+        guild_id: int,
+        since: datetime | None = None,
+        limit: int = 10,
+        exclude_ids: list[int] | None = None,
+    ) -> list[LeaderboardEntry]:
+        """Return top handlers ranked by tickets closed."""
+        match: dict = {
+            "guild_id": guild_id,
+            "status": {"$in": [TicketStatus.CLOSED.value, TicketStatus.ARCHIVED.value]},
+            "closed_by_id": {
+                "$nin": exclude_ids or [],
+                "$ne": None,
+            },
+        }
+        if since is not None:
+            match["created_at"] = {"$gte": since.isoformat()}
+
+        pipeline = [
+            {"$match": match},
+            {
+                "$group": {
+                    "_id": "$closed_by_id",
+                    "tickets_closed": {"$sum": 1},
+                    "avg_resolution_ms": {
+                        "$avg": {
+                            "$cond": [
+                                {
+                                    "$and": [
+                                        {"$ne": ["$closed_at", None]},
+                                        {"$ne": ["$created_at", None]},
+                                    ]
+                                },
+                                {
+                                    "$subtract": [
+                                        {"$toDate": "$closed_at"},
+                                        {"$toDate": "$created_at"},
+                                    ]
+                                },
+                                None,
+                            ]
+                        }
+                    },
+                }
+            },
+            {"$sort": {"tickets_closed": DESCENDING}},
+            {"$limit": limit},
+        ]
+
+        try:
+            cursor = await self._tickets.aggregate(pipeline)
+            docs = await cursor.to_list(length=limit)
+            entries: list[LeaderboardEntry] = []
+            for rank, doc in enumerate(docs, start=1):
+                avg_ms = doc.get("avg_resolution_ms")
+                entries.append(
+                    LeaderboardEntry(
+                        rank=rank,
+                        staff_id=doc["_id"],
+                        tickets_closed=doc["tickets_closed"],
+                        avg_resolution_seconds=avg_ms / 1000 if avg_ms else None,
+                    )
+                )
+            return entries
+        except PyMongoError as e:
+            logger.error(f"get_leaderboard_stats failed for guild {guild_id}: {e}")
+            return []

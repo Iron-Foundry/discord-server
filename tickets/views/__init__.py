@@ -12,8 +12,6 @@ __all__ = [
     "build_panel_embed",
     "TicketToolsView",
     "CloseReasonModal",
-    "AddUserModal",
-    "RemoveUserModal",
     "build_tools_embed",
     "ReopenView",
     "build_closed_embed",

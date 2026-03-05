@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import os
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
-from typing import TYPE_CHECKING
 
 from commands.checks import handle_check_failure, is_senior_staff, is_staff
 from commands.help_registry import HelpEntry, HelpGroup, HelpRegistry
@@ -13,6 +14,28 @@ from tickets.views.ticket_tools import CloseReasonModal
 
 if TYPE_CHECKING:
     from tickets.ticket_service import TicketService
+
+_PERIOD_DAYS: dict[str, int] = {"7d": 7, "30d": 30, "90d": 90}
+
+_PERIOD_CHOICES = [
+    app_commands.Choice(name="Last 7 days", value="7d"),
+    app_commands.Choice(name="Last 30 days", value="30d"),
+    app_commands.Choice(name="Last 90 days", value="90d"),
+    app_commands.Choice(name="All time", value="all"),
+]
+
+
+def _parse_period(period: str) -> datetime | None:
+    days = _PERIOD_DAYS.get(period)
+    return datetime.now(UTC) - timedelta(days=days) if days else None
+
+
+def _fmt_seconds(seconds: float | None) -> str:
+    if seconds is None:
+        return "N/A"
+    h, rem = divmod(int(seconds), 3600)
+    m = rem // 60
+    return f"{h}h {m}m" if h else f"{m}m"
 
 
 def register_help(registry: HelpRegistry) -> None:
@@ -58,6 +81,16 @@ def register_help(registry: HelpRegistry) -> None:
                     "/ticket panel <channel>",
                     "Post the ticket panel to a channel",
                     "Senior Staff",
+                ),
+                HelpEntry(
+                    "/ticket stats [user] [period]",
+                    "View handler statistics for a staff member",
+                    "Staff",
+                ),
+                HelpEntry(
+                    "/ticket leaderboard [period]",
+                    "Show top handlers ranked by tickets closed",
+                    "Staff",
                 ),
             ],
         )
@@ -456,6 +489,92 @@ class TicketGroup(
                 )
 
         await interaction.followup.send(embed=embed, ephemeral=True)
+
+    # ------------------------------------------------------------------
+    # /ticket stats [user] [period]
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="stats", description="View handler statistics for a staff member"
+    )
+    @app_commands.describe(
+        user="Staff member to view (defaults to you)",
+        period="Time period to filter by",
+    )
+    @app_commands.choices(period=_PERIOD_CHOICES)
+    @is_staff()
+    async def stats(
+        self,
+        interaction: discord.Interaction,
+        user: discord.Member | None = None,
+        period: str = "all",
+    ) -> None:
+        from tickets.charts import build_stats_chart
+        from tickets.views.stats import StatsView, _build_stats_embed
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        target = user if user is not None else interaction.user
+        if not isinstance(target, discord.Member):
+            await interaction.followup.send(
+                "Could not resolve the target member.", ephemeral=True
+            )
+            return
+
+        since = _parse_period(period)
+        handler_stats = await self._service.get_handler_stats(target.id, since)
+        if handler_stats is None:
+            await interaction.followup.send(
+                "No closed tickets found for this period.", ephemeral=True
+            )
+            return
+
+        embed = _build_stats_embed(handler_stats, target.display_name, period)
+        chart = build_stats_chart(handler_stats, target.display_name)
+        view = StatsView(self._service, target.id, target.display_name, period)
+        await interaction.followup.send(
+            embed=embed, file=chart, view=view, ephemeral=True
+        )
+
+    # ------------------------------------------------------------------
+    # /ticket leaderboard [period]
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="leaderboard", description="Show top handlers ranked by tickets closed"
+    )
+    @app_commands.describe(period="Time period to filter by")
+    @app_commands.choices(period=_PERIOD_CHOICES)
+    @is_staff()
+    async def leaderboard(
+        self,
+        interaction: discord.Interaction,
+        period: str = "30d",
+    ) -> None:
+        from tickets.charts import build_leaderboard_chart
+        from tickets.views.stats import LeaderboardView, _build_leaderboard_embed
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        since = _parse_period(period)
+        entries = await self._service.get_leaderboard(since)
+        names: dict[int, str] = {}
+        if interaction.guild:
+            names = {
+                e.staff_id: (
+                    m.display_name
+                    if (m := interaction.guild.get_member(e.staff_id)) is not None
+                    else f"<@{e.staff_id}>"
+                )
+                for e in entries
+            }
+
+        embed = _build_leaderboard_embed(entries, names, period, "closed")
+        chart = build_leaderboard_chart(entries, names, "closed")
+        view = LeaderboardView(self._service, period, "closed")
+        await interaction.followup.send(
+            embed=embed, file=chart, view=view, ephemeral=True
+        )
 
 
 class TicketTypeGroup(

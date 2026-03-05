@@ -9,18 +9,19 @@ from loguru import logger
 
 from tickets.handlers.archive_channel import ArchiveChannelTicketRepository
 from tickets.handlers.database import MongoTicketRepository
+from tickets.models.stats import HandlerStats, LeaderboardEntry
 from tickets.models.ticket import (
+    MemberSnapshot,
     ReopenEvent,
     Ticket,
     TicketRecord,
     TicketStatus,
     TicketTypeRegistry,
-    MemberSnapshot,
 )
 from tickets.models.transcript import (
-    Transcript,
     StaffAction,
     StaffActionType,
+    Transcript,
     TranscriptHandler,
 )
 
@@ -570,6 +571,22 @@ class TicketService:
         self, user_id: int, limit: int = 10
     ) -> list[TicketRecord]:
         return await self.repo.get_tickets_by_user(self.guild.id, user_id, limit=limit)
+
+    async def get_handler_stats(
+        self, staff_id: int, since: datetime | None
+    ) -> HandlerStats | None:
+        """Return aggregated handler stats for a staff member."""
+        return await self.repo.get_handler_stats(self.guild.id, staff_id, since)
+
+    async def get_leaderboard(
+        self, since: datetime | None, limit: int = 10
+    ) -> list[LeaderboardEntry]:
+        """Return the top handlers ranked by tickets closed, excluding the bot."""
+        bot_id = self.guild.me.id if self.guild.me else None
+        exclude = [bot_id] if bot_id else []
+        return await self.repo.get_leaderboard_stats(
+            self.guild.id, since, limit, exclude
+        )
 
     # -------------------------------------------------------------------------
     # Transcript handler registry
