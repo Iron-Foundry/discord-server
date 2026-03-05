@@ -42,9 +42,9 @@ async def load_ticket_service(
 
     register_ticket_help(registry)
     register_handler_help(registry)
-    tree.add_command(TicketGroup(service=service))
-    tree.add_command(TicketTypeGroup(service=service))
-    tree.add_command(HandlerGroup(service=service))
+    tree.add_command(TicketGroup(service=service), guild=guild)
+    tree.add_command(TicketTypeGroup(service=service), guild=guild)
+    tree.add_command(HandlerGroup(service=service), guild=guild)
     logger.info("Ticket service initialised and commands registered")
     return service
 
@@ -68,7 +68,7 @@ async def load_role_service(
     await service.initialize()
 
     register_rolepanel_help(registry)
-    tree.add_command(RolePanelGroup(service=service))
+    tree.add_command(RolePanelGroup(service=service), guild=guild)
     logger.info("Role panel service initialised and commands registered")
     return service
 
@@ -92,7 +92,7 @@ async def load_action_log_service(
     await service.initialize()
 
     register_actionlog_help(registry)
-    tree.add_command(ActionLogGroup(service=service))
+    tree.add_command(ActionLogGroup(service=service), guild=guild)
     logger.info("Action log service initialised and commands registered")
     return service
 
@@ -115,20 +115,21 @@ async def load_broadcast_service(
     await service.initialize()
 
     register_broadcast_help(registry)
-    tree.add_command(BroadcastGroup(service=service))
-    tree.add_command(make_broadcast_context_menu(service=service))
+    tree.add_command(BroadcastGroup(service=service), guild=guild)
+    tree.add_command(make_broadcast_context_menu(service=service), guild=guild)
     logger.info("Broadcast service initialised and commands registered")
     return service
 
 
 def _load_help_command(
+    guild: discord.Guild,
     tree: app_commands.CommandTree,
     registry: HelpRegistry,
 ) -> None:
     from commands.help import make_help_command, register_help
 
     register_help(registry)
-    tree.add_command(make_help_command(registry))
+    tree.add_command(make_help_command(registry), guild=guild)
     logger.info("Help command registered")
 
 
@@ -147,5 +148,5 @@ async def load_all_services(
         load_action_log_service(guild, tree, registry, mongo_uri, db_name, client),
         load_broadcast_service(guild, tree, registry, mongo_uri, db_name),
     )
-    _load_help_command(tree, registry)
+    _load_help_command(guild, tree, registry)
     return ticket, role, action_log, broadcast
