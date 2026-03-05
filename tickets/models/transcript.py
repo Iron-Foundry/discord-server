@@ -1,83 +1,126 @@
 import discord
+from enum import Enum
 from pydantic import BaseModel, Field
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any, Protocol
 
 
-class TranscriptEntry(BaseModel):
-    """Represents a single discord message in a ticket transcript"""
+class AttachmentInfo(BaseModel):
+    filename: str
+    url: str
+    size: int
+    content_type: str | None = None
 
-    author: discord.Member | discord.User
+
+class TranscriptEntry(BaseModel):
+    message_id: int
+    author_id: int
+    author_name: str
+    author_display_name: str
+    author_avatar_url: str
+    author_is_bot: bool
     content: str
     timestamp: datetime
-    attachments: list[str] = Field(default_factory=list)
-    embeds: list[dict[str, Any]] = Field(default_factory=list)
-    message_id: int | None = None
+    edited_at: datetime | None = None
+    attachments: list[AttachmentInfo] = Field(default_factory=list)
+    embeds: list[Any] = Field(default_factory=list)
 
     @classmethod
-    def from_discord_message(cls, message: discord.Message) -> TranscriptEntry:
-        """Create TranscriptEntry from Discord message"""
+    def from_discord_message(cls, message: discord.Message) -> "TranscriptEntry":
         return cls(
+            message_id=message.id,
             author_id=message.author.id,
             author_name=message.author.name,
-            author_profile_picture=message.author.display_avatar.url,
             author_display_name=message.author.display_name,
-            content=message.content,
+            author_avatar_url=str(message.author.display_avatar.url),
+            author_is_bot=message.author.bot,
+            content=message.content or "",
             timestamp=message.created_at,
-            attachments=[att.filename for att in message.attachments],
+            edited_at=message.edited_at,
+            attachments=[
+                AttachmentInfo(
+                    filename=att.filename,
+                    url=att.url,
+                    size=att.size,
+                    content_type=att.content_type,
+                )
+                for att in message.attachments
+            ],
             embeds=[embed.to_dict() for embed in message.embeds],
-            message_id=message.id,
         )
 
 
-class Transcript(BaseModel):
-    """Model for ticket transcript data"""
+class StaffActionType(str, Enum):
+    CLOSED = "closed"
+    REOPENED = "reopened"
+    ADDED_USER = "added_user"
+    REMOVED_USER = "removed_user"
+    FROZE = "froze"
+    UNFROZE = "unfroze"
+    TIMED_OUT = "timed_out"
 
+
+class StaffAction(BaseModel):
+    """Records a staff-initiated event inside a ticket."""
+
+    actor_id: int
+    actor_name: str
+    action: StaffActionType
+    target_id: int | None = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    note: str | None = None
+
+
+class Transcript(BaseModel):
     ticket_id: int
     channel_id: int
+    guild_id: int
     creator_id: int
     ticket_type: str
-    reason: str = Field(default_factory=str)
-    created_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime
     closed_at: datetime | None = None
+    close_reason: str | None = None  # DM'd to the ticket creator
+    staff_note: str | None = None  # internal only, never shown to user
+    closed_by_id: int | None = None
     entries: list[TranscriptEntry] = Field(default_factory=list)
+    staff_actions: list[StaffAction] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     def add_entry(self, entry: TranscriptEntry) -> None:
-        """Add an entry to the transcript"""
         self.entries.append(entry)
 
-    def close(self) -> None:
-        """Mark transcript as closed"""
-        self.closed_at = datetime.now()
+    def add_staff_action(self, action: StaffAction) -> None:
+        self.staff_actions.append(action)
+
+    def close(self, closed_by_id: int, reason: str | None, note: str | None) -> None:
+        self.closed_at = datetime.now(UTC)
+        self.closed_by_id = closed_by_id
+        self.close_reason = reason
+        self.staff_note = note
 
     def get_duration(self) -> str:
-        """Get formatted duration of ticket"""
-        if not self.closed_at:
-            duration = datetime.now() - self.created_at
-        else:
-            duration = self.closed_at - self.created_at
-
+        end = self.closed_at or datetime.now(UTC)
+        duration = end - self.created_at
         hours = int(duration.total_seconds() // 3600)
         minutes = int((duration.total_seconds() % 3600) // 60)
         return f"{hours}h {minutes}m"
 
     def get_message_count(self) -> int:
-        """Get total message count"""
         return len(self.entries)
 
     def get_unique_participants(self) -> set[int]:
-        """Get set of unique participant IDs"""
         return {entry.author_id for entry in self.entries}
+
+    def get_first_staff_response(self, staff_ids: set[int]) -> datetime | None:
+        """Return timestamp of the first staff member message (for SLA tracking)."""
+        for entry in self.entries:
+            if entry.author_id in staff_ids and not entry.author_is_bot:
+                return entry.timestamp
+        return None
 
 
 class TranscriptHandler(Protocol):
-    """Protocol for transcript logging handlers"""
+    """Protocol for pluggable transcript persistence backends."""
 
-    async def save_transcript(self, transcript: Transcript) -> bool:
-        """Save transcript and return success status"""
-        ...
-
-    async def get_transcript(self, ticket_id: int) -> Transcript | None:
-        """Retrieve a transcript by ticket ID"""
-        ...
+    async def save_transcript(self, transcript: Transcript) -> bool: ...
+    async def get_transcript(self, ticket_id: int) -> Transcript | None: ...

@@ -9,16 +9,15 @@ from core.config import ConfigInterface, ConfigVars
 async def main():
     logger.info("Starting Service: Discord-Server")
     config = ConfigInterface()
-    discord_token, debug_mode = (
-        config.get_variable(ConfigVars.discord_token),
-        config.get_variable(ConfigVars.debug_mode),
-    )
-    if discord_token is not None:
-        client = DiscordClient(debug=debug_mode)
-        await client.start(token=discord_token)
+    discord_token = config.get_variable(ConfigVars.DISCORD_TOKEN)
+    debug_mode = config.get_variable(ConfigVars.DEBUG_MODE)
 
-    logger.warning("Environment file or token key missing.")
-    exit(code=1)
+    if discord_token is None:
+        logger.warning("Environment file or DISCORD_TOKEN key missing.")
+        exit(code=1)
+
+    client = DiscordClient(debug=debug_mode == "true")
+    await client.start(token=discord_token)
 
 
 if __name__ == "__main__":

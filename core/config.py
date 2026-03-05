@@ -10,10 +10,16 @@ class ConfigVars(str, Enum):
     DISCORD_TOKEN = "DISCORD_TOKEN"
     GUILD_ID = "GUILD_ID"
     MONGO_URI = "MONGO_URI"
+    MONGO_DB_NAME = "MONGO_DB_NAME"
+    ARCHIVE_CHANNEL_ID = "ARCHIVE_CHANNEL_ID"
     DEBUG_MODE = "DEBUG_MODE"
     CHANNELS = "CHANNEL_COLLECTION"
     ROLES = "ROLE_COLLECTION"
     USERS = "USER_COLLECTION"
+    STAFF_ROLE_ID = "STAFF_ROLE_ID"
+    SENIOR_STAFF_ROLE_ID = "SENIOR_STAFF_ROLE_ID"
+    OWNER_ROLE_ID = "OWNER_ROLE_ID"
+    MENTOR_ROLE_ID = "MENTOR_ROLE_ID"
 
 
 class ConfigInterface:
@@ -26,6 +32,7 @@ class ConfigInterface:
         logger.info("Reloading Environment")
         load_dotenv()
 
-    def get_variable(self, variable: ConfigVars) -> str | None:
-        logger.info(f"Fetching environment variable: {variable.value}")
-        return os.getenv(variable.value, None)
+    def get_variable(self, variable: "ConfigVars | str") -> str | None:
+        key = variable.value if isinstance(variable, ConfigVars) else variable
+        logger.info(f"Fetching environment variable: {key}")
+        return os.getenv(key, None)

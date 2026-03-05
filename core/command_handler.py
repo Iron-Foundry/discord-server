@@ -1,6 +1,31 @@
-from typing import Coroutine, Optional
+from collections.abc import Callable
+from typing import Any, Optional
 import discord
 from discord import app_commands
+
+
+class FoundryCommandTree(app_commands.CommandTree):
+    """CommandTree subclass with friendly error responses."""
+
+    async def on_error(
+        self,
+        interaction: discord.Interaction,
+        error: app_commands.AppCommandError,
+    ) -> None:
+        """Handle tree-level errors for standalone commands and context menus."""
+        if isinstance(error, app_commands.CommandNotFound):
+            await interaction.response.send_message(
+                "Unknown command. Use `/help` to see available commands.",
+                ephemeral=True,
+            )
+            return
+        if isinstance(error, app_commands.CheckFailure):
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "You don't have permission to use this command.", ephemeral=True
+                )
+            return
+        await super().on_error(interaction, error)
 
 
 class CommandHandler:
@@ -16,7 +41,7 @@ class CommandHandler:
 
     def __init__(self, client: Optional[discord.Client] = None) -> None:
         if self._tree is None and client is not None:
-            self._tree = app_commands.CommandTree(client)
+            self._tree = FoundryCommandTree(client)
             self._client = client
 
     @property
@@ -38,13 +63,13 @@ class CommandHandler:
         return self._guild
 
     @guild.setter
-    def guild(self, guild: discord.Guild):
-        self._guild = guild.id
+    def guild(self, guild: discord.Guild) -> None:
+        self._guild = guild
 
     def add_command(self, name: str, description: str):
         """Decorator to add a command to the tree"""
 
-        def decorator(func: Coroutine):
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             command = app_commands.command(name=name, description=description)(func)
 
             if self._guild:
@@ -72,10 +97,9 @@ class CommandHandler:
 
         return group
 
-    async def sync(self, _global: bool = False):
+    async def sync(self, _global: bool = False) -> list[app_commands.AppCommand]:
         """Sync commands with Discord"""
         if not _global:
-            result = await self.tree.sync(guild=self._guild)
-            return result
+            return await self.tree.sync(guild=self._guild)
         else:
-            await self.tree.sync()
+            return await self.tree.sync()

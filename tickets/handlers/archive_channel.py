@@ -1,0 +1,98 @@
+import io
+from datetime import datetime, UTC
+
+import discord
+from loguru import logger
+
+from tickets.models.transcript import Transcript
+
+
+class ArchiveChannelTicketRepository:
+    """
+    TranscriptHandler that posts a summary embed and full message log
+    to a Discord text channel when a ticket is closed.
+
+    get_transcript is not supported — returns None.
+    """
+
+    def __init__(self, channel: discord.TextChannel) -> None:
+        self._channel = channel
+
+    async def save_transcript(self, transcript: Transcript) -> bool:
+        try:
+            embed = self._build_embed(transcript)
+            file = self._build_file(transcript)
+            await self._channel.send(embed=embed, file=file)
+            return True
+        except Exception as e:
+            logger.error(
+                f"ArchiveChannelTicketRepository: failed to post transcript #{transcript.ticket_id}: {e}"
+            )
+            return False
+
+    async def get_transcript(self, ticket_id: int) -> None:
+        return None
+
+    # -------------------------------------------------------------------------
+
+    def _build_embed(self, transcript: Transcript) -> discord.Embed:
+        type_name = transcript.ticket_type.replace("_", " ").title()
+        embed = discord.Embed(
+            title=f"🗂️ Ticket Closed — #{transcript.ticket_id:04d}",
+            color=discord.Color.greyple(),
+            timestamp=datetime.now(UTC),
+        )
+        embed.add_field(name="Type", value=type_name, inline=True)
+        embed.add_field(
+            name="Creator", value=f"<@{transcript.creator_id}>", inline=True
+        )
+        embed.add_field(name="Duration", value=transcript.get_duration(), inline=True)
+        embed.add_field(
+            name="Messages", value=str(transcript.get_message_count()), inline=True
+        )
+        embed.add_field(
+            name="Participants",
+            value=str(len(transcript.get_unique_participants())),
+            inline=True,
+        )
+
+        if transcript.close_reason:
+            embed.add_field(
+                name="Close Reason", value=transcript.close_reason, inline=False
+            )
+        if transcript.staff_note:
+            embed.add_field(
+                name="Staff Note", value=transcript.staff_note, inline=False
+            )
+
+        embed.set_footer(text=f"Channel ID: {transcript.channel_id}")
+        return embed
+
+    def _build_file(self, transcript: Transcript) -> discord.File:
+        lines: list[str] = [
+            f"Ticket #{transcript.ticket_id:04d} — {transcript.ticket_type.replace('_', ' ').title()}",
+            f"Created:  {transcript.created_at.strftime('%Y-%m-%d %H:%M UTC')}",
+            f"Closed:   {transcript.closed_at.strftime('%Y-%m-%d %H:%M UTC') if transcript.closed_at else '—'}",
+            f"Duration: {transcript.get_duration()}",
+            "=" * 60,
+            "",
+        ]
+
+        for entry in transcript.entries:
+            ts = entry.timestamp.strftime("%H:%M")
+            prefix = "[BOT]" if entry.author_is_bot else ""
+            lines.append(f"[{ts}] {prefix}{entry.author_display_name}: {entry.content}")
+            for att in entry.attachments:
+                lines.append(f"         📎 {att.filename} — {att.url}")
+
+        if transcript.staff_actions:
+            lines += ["", "=" * 60, "Staff Actions", ""]
+            for action in transcript.staff_actions:
+                ts = action.timestamp.strftime("%Y-%m-%d %H:%M UTC")
+                lines.append(f"[{ts}] {action.actor_name}: {action.action}")
+                if action.note:
+                    lines.append(f"         Note: {action.note}")
+
+        content = "\n".join(lines)
+        buf = io.BytesIO(content.encode("utf-8"))
+        return discord.File(buf, filename=f"ticket-{transcript.ticket_id:04d}.txt")

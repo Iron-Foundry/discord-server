@@ -1,1 +1,626 @@
-# TODO Implement Ticket Service
+from __future__ import annotations
+
+import asyncio
+from datetime import datetime, UTC
+from typing import Any, cast
+
+import discord
+from loguru import logger
+
+from tickets.handlers.archive_channel import ArchiveChannelTicketRepository
+from tickets.handlers.database import MongoTicketRepository
+from tickets.models.ticket import (
+    Ticket,
+    TicketRecord,
+    TicketStatus,
+    TicketTypeRegistry,
+    MemberSnapshot,
+)
+from tickets.models.transcript import (
+    Transcript,
+    StaffAction,
+    StaffActionType,
+    TranscriptHandler,
+)
+
+TICKET_TIMEOUT_SECONDS = 86_400  # 24 hours
+
+
+class TicketService:
+    """
+    Central coordinator for the ticket system.
+
+    Responsibilities:
+    - Manage the panel embed and select menu
+    - Create, close, and reopen tickets
+    - Enforce per-user limits and 24-hr inactivity timeouts
+    - Persist all state to MongoDB
+    - Recover open tickets from the DB on bot restart
+    - Dispatch to pluggable transcript handlers
+    """
+
+    def __init__(self, guild: discord.Guild, repo: MongoTicketRepository) -> None:
+        self.guild = guild
+        self.repo = repo
+        self.type_registry = TicketTypeRegistry()
+        # channel_id → Ticket
+        self.active_tickets: dict[int, Ticket] = {}
+        # ticket_id → asyncio.Task
+        self._timeout_tasks: dict[int, asyncio.Task] = {}
+        # name → (handler, enabled)
+        self._transcript_handlers: dict[str, tuple[TranscriptHandler, bool]] = {
+            "mongodb": (cast(TranscriptHandler, repo), True),
+        }
+        self._panel_channel: discord.TextChannel | None = None
+        self._panel_message: discord.Message | None = None
+        self._closed_tickets: dict[int, Ticket] = {}
+
+    # -------------------------------------------------------------------------
+    # Startup — restart recovery
+    # -------------------------------------------------------------------------
+
+    async def initialize(self) -> None:
+        """Load open tickets from MongoDB and resume their timeout tasks."""
+        await self.repo.ensure_indexes()
+        archive = self._get_archive_channel()
+        if archive:
+            self.register_handler(
+                "archive_channel", ArchiveChannelTicketRepository(archive)
+            )
+            logger.info(f"ArchiveChannelTicketRepository registered → #{archive.name}")
+        records = await self.repo.get_open_tickets(self.guild.id)
+        now = datetime.now(UTC)
+
+        for record in records:
+            channel = self.guild.get_channel(record.channel_id)
+            if not isinstance(channel, discord.TextChannel):
+                logger.warning(
+                    f"Ticket #{record.ticket_id}: channel {record.channel_id} not found, skipping"
+                )
+                continue
+
+            # We can't re-fetch the live Member easily here; create a stub
+            creator = self.guild.get_member(record.creator.id)
+            ticket_type = self.type_registry.get(record.ticket_type)
+            if not ticket_type:
+                logger.warning(
+                    f"Ticket #{record.ticket_id}: unknown type '{record.ticket_type}', skipping"
+                )
+                continue
+
+            ticket = Ticket.from_record(record, channel, ticket_type, creator)
+            self.active_tickets[channel.id] = ticket
+
+            if not record.timeout_frozen:
+                elapsed = (
+                    now - record.last_message_at.replace(tzinfo=UTC)
+                ).total_seconds()
+                remaining = max(0.0, TICKET_TIMEOUT_SECONDS - elapsed)
+                if remaining == 0:
+                    logger.info(
+                        f"Ticket #{record.ticket_id} timed out while offline — closing"
+                    )
+                    asyncio.create_task(self._auto_close(ticket))
+                else:
+                    self._schedule_timeout(ticket, remaining)
+
+        logger.info(f"TicketService: recovered {len(self.active_tickets)} open tickets")
+
+    # -------------------------------------------------------------------------
+    # Panel
+    # -------------------------------------------------------------------------
+
+    async def post_panel(self, channel: discord.TextChannel) -> None:
+        """Post (or re-post) the ticket panel in the given channel."""
+        from tickets.views.panel import TicketPanelView, build_panel_embed
+
+        self._panel_channel = channel
+        embed = build_panel_embed(self.guild)
+        view = TicketPanelView(self)
+        self._panel_message = await channel.send(embed=embed, view=view)
+        logger.info(f"Panel posted to #{channel.name}")
+
+    async def refresh_panel(self) -> None:
+        """Rebuild the panel select menu to reflect current enabled types."""
+        if not self._panel_message:
+            return
+        from tickets.views.panel import TicketPanelView, build_panel_embed
+
+        embed = build_panel_embed(self.guild)
+        view = TicketPanelView(self)
+        try:
+            await self._panel_message.edit(embed=embed, view=view)
+        except discord.NotFound:
+            logger.warning("Panel message no longer exists; panel not refreshed")
+
+    # -------------------------------------------------------------------------
+    # Ticket lifecycle
+    # -------------------------------------------------------------------------
+
+    async def create_ticket(
+        self,
+        interaction: discord.Interaction,
+        type_id: str,
+        metadata: dict[str, Any],
+    ) -> Ticket | None:
+        """
+        Create a new ticket channel and persist the record.
+        Called from the panel select callback and from /ticket open.
+        """
+        ticket_type = self.type_registry.get(type_id)
+        if not ticket_type or not ticket_type.enabled:
+            logger.error(f"create_ticket: unknown or disabled type '{type_id}'")
+            return None
+
+        creator = interaction.user
+        if not isinstance(creator, discord.Member):
+            return None
+
+        # Per-user open ticket limit
+        existing = [
+            t
+            for t in self.active_tickets.values()
+            if t.record.creator.id == creator.id and t.record.ticket_type == type_id
+        ]
+        if len(existing) >= ticket_type.max_open_per_user:
+            await interaction.followup.send(
+                f"You already have an open **{ticket_type.display_name}** ticket.",
+                ephemeral=True,
+            )
+            return None
+
+        try:
+            ticket_id = await self.repo.next_ticket_id()
+            now = datetime.now(UTC)
+
+            # Resolve or create category
+            category = await self._get_or_create_category(ticket_type.category_name)
+            channel_name = f"{ticket_type.channel_prefix}-{ticket_id:04d}"
+            overwrites = ticket_type.get_channel_permissions(self.guild, creator)
+
+            channel = await category.create_text_channel(
+                name=channel_name, overwrites=overwrites
+            )
+
+            record = TicketRecord(
+                ticket_id=ticket_id,
+                guild_id=self.guild.id,
+                channel_id=channel.id,
+                creator=MemberSnapshot.from_member(creator),
+                ticket_type=type_id,
+                last_message_at=now,
+                created_at=now,
+                metadata=metadata,
+            )
+
+            transcript = Transcript(
+                ticket_id=ticket_id,
+                channel_id=channel.id,
+                guild_id=self.guild.id,
+                creator_id=creator.id,
+                ticket_type=type_id,
+                created_at=now,
+            )
+
+            ticket = Ticket(
+                record=record, channel=channel, creator=creator, ticket_type=ticket_type
+            )
+            ticket.transcript = transcript
+
+            self.active_tickets[channel.id] = ticket
+            await self.repo.save_ticket(record)
+
+            embed = ticket_type.build_create_embed(record)
+            await channel.send(embed=embed)
+            await ticket_type.on_created(record, channel)
+
+            self._schedule_timeout(ticket, TICKET_TIMEOUT_SECONDS)
+
+            logger.info(
+                f"Ticket #{ticket_id} ({ticket_type.display_name}) created by {creator}"
+            )
+            return ticket
+
+        except Exception as e:
+            logger.exception(f"Failed to create ticket: {e}")
+            return None
+
+    async def close_ticket(
+        self,
+        ticket_id: int,
+        closer: discord.Member,
+        reason: str | None,
+        note: str | None,
+    ) -> bool:
+        """Collect transcript, persist, DM the creator, lock channel, post reopen view."""
+        ticket = self._get_by_ticket_id(ticket_id)
+        if not ticket:
+            logger.error(f"close_ticket: ticket #{ticket_id} not found")
+            return False
+
+        try:
+            await self._cancel_timeout(ticket_id)
+            await ticket.collect_messages()
+            await ticket.close(closer, reason, note)
+
+            # DM the ticket creator
+            if reason:
+                try:
+                    creator_user = await self.guild.fetch_member(
+                        ticket.record.creator.id
+                    )
+                    await creator_user.send(
+                        f"**Your ticket #{ticket_id:04d} has been closed.**\n\n"
+                        f"**Reason:** {reason}"
+                    )
+                except (discord.Forbidden, discord.HTTPException):
+                    logger.warning(f"Could not DM creator of ticket #{ticket_id}")
+
+            # Save transcript via all handlers
+            for handler in self._active_handlers():
+                await handler.save_transcript(ticket.transcript)
+
+            # Update DB record
+            await self.repo.update_ticket(
+                ticket_id,
+                status=TicketStatus.CLOSED.value,
+                closed_at=ticket.record.closed_at.isoformat()
+                if ticket.record.closed_at
+                else None,
+                closed_by_id=closer.id,
+                close_reason=reason,
+                staff_note=note,
+            )
+
+            # Lock the channel (deny send_messages for @everyone and the creator)
+            await ticket.channel.set_permissions(
+                self.guild.default_role, send_messages=False, view_channel=False
+            )
+            if ticket.creator:
+                await ticket.channel.set_permissions(
+                    ticket.creator,
+                    send_messages=False,
+                    view_channel=True,
+                    read_message_history=True,
+                )
+
+            # Post closed embed + reopen view
+            from tickets.views.reopen import ReopenView, build_closed_embed
+
+            closed_embed = build_closed_embed(ticket_id, closer, reason)
+            reopen_view = ReopenView(self, ticket_id)
+            await ticket.channel.send(embed=closed_embed, view=reopen_view)
+
+            # Remove from active tracking (but keep channel so reopen works)
+            del self.active_tickets[ticket.channel.id]
+            self._closed_tickets[ticket_id] = ticket
+
+            logger.info(f"Ticket #{ticket_id} closed by {closer}")
+            return True
+
+        except Exception as e:
+            logger.exception(f"Failed to close ticket #{ticket_id}: {e}")
+            return False
+
+    async def reopen_ticket(self, ticket_id: int, reopener: discord.Member) -> bool:
+        """Restore channel permissions and restart the timeout."""
+        closed = self._closed_tickets
+        ticket = closed.get(ticket_id)
+        if not ticket:
+            # Try to reconstruct from DB
+            record = await self.repo.get_ticket(ticket_id)
+            if not record or record.status != TicketStatus.CLOSED:
+                logger.error(
+                    f"reopen_ticket: ticket #{ticket_id} not found or not closed"
+                )
+                return False
+            channel = self.guild.get_channel(record.channel_id)
+            if not isinstance(channel, discord.TextChannel):
+                return False
+            ticket_type = self.type_registry.get(record.ticket_type)
+            if not ticket_type:
+                return False
+            creator_member = self.guild.get_member(record.creator.id)
+            ticket = Ticket.from_record(record, channel, ticket_type, creator_member)
+
+        try:
+            await ticket.reopen(reopener)
+
+            # Restore channel permissions
+            creator = self.guild.get_member(ticket.record.creator.id)
+            overwrites = ticket.ticket_type.get_channel_permissions(
+                self.guild, creator or reopener
+            )
+            for target, overwrite in overwrites.items():
+                if isinstance(target, (discord.Role, discord.Member)):
+                    await ticket.channel.set_permissions(target, overwrite=overwrite)
+
+            await self.repo.update_ticket(
+                ticket_id,
+                status=TicketStatus.OPEN.value,
+                closed_at=None,
+                closed_by_id=None,
+                close_reason=None,
+                reopen_history=[
+                    e.model_dump(mode="json") for e in ticket.record.reopen_history
+                ],
+            )
+
+            # Post reopen embed
+            reopen_embed = ticket.ticket_type.build_reopen_embed(
+                ticket.record, reopener
+            )
+            await ticket.channel.send(embed=reopen_embed)
+
+            self.active_tickets[ticket.channel.id] = ticket
+            if ticket_id in closed:
+                del closed[ticket_id]
+
+            self._schedule_timeout(ticket, TICKET_TIMEOUT_SECONDS)
+
+            await ticket.ticket_type.on_reopened(ticket.record, reopener)
+            logger.info(f"Ticket #{ticket_id} reopened by {reopener}")
+            return True
+
+        except Exception as e:
+            logger.exception(f"Failed to reopen ticket #{ticket_id}: {e}")
+            return False
+
+    # -------------------------------------------------------------------------
+    # Ticket management
+    # -------------------------------------------------------------------------
+
+    async def add_user(self, ticket_id: int, member: discord.Member) -> bool:
+        ticket = self._get_by_ticket_id(ticket_id)
+        if not ticket:
+            return False
+        try:
+            await ticket.channel.set_permissions(
+                member,
+                view_channel=True,
+                send_messages=True,
+                attach_files=True,
+                embed_links=True,
+                read_message_history=True,
+            )
+            ticket.transcript.add_staff_action(
+                StaffAction(
+                    actor_id=member.id,
+                    actor_name=str(member),
+                    action=StaffActionType.ADDED_USER,
+                    target_id=member.id,
+                )
+            )
+            return True
+        except discord.HTTPException as e:
+            logger.error(f"add_user failed: {e}")
+            return False
+
+    async def remove_user(self, ticket_id: int, member: discord.Member) -> bool:
+        ticket = self._get_by_ticket_id(ticket_id)
+        if not ticket:
+            return False
+        try:
+            await ticket.channel.set_permissions(member, overwrite=None)
+            ticket.transcript.add_staff_action(
+                StaffAction(
+                    actor_id=member.id,
+                    actor_name=str(member),
+                    action=StaffActionType.REMOVED_USER,
+                    target_id=member.id,
+                )
+            )
+            return True
+        except discord.HTTPException as e:
+            logger.error(f"remove_user failed: {e}")
+            return False
+
+    async def freeze_timeout(self, ticket_id: int) -> bool:
+        ticket = self._get_by_ticket_id(ticket_id)
+        if not ticket:
+            return False
+        await self._cancel_timeout(ticket_id)
+        ticket.record.timeout_frozen = True
+        await self.repo.update_ticket(ticket_id, timeout_frozen=True)
+        ticket.transcript.add_staff_action(
+            StaffAction(actor_id=0, actor_name="System", action=StaffActionType.FROZE)
+        )
+        logger.info(f"Ticket #{ticket_id} timeout frozen")
+        return True
+
+    async def unfreeze_timeout(self, ticket_id: int) -> bool:
+        ticket = self._get_by_ticket_id(ticket_id)
+        if not ticket:
+            return False
+        ticket.record.timeout_frozen = False
+        await self.repo.update_ticket(ticket_id, timeout_frozen=False)
+        self._schedule_timeout(ticket, TICKET_TIMEOUT_SECONDS)
+        ticket.transcript.add_staff_action(
+            StaffAction(actor_id=0, actor_name="System", action=StaffActionType.UNFROZE)
+        )
+        logger.info(f"Ticket #{ticket_id} timeout unfrozen")
+        return True
+
+    async def spawn_tools(self, interaction: discord.Interaction) -> None:
+        """Post the moderator tools view in the current ticket channel."""
+        if interaction.channel_id is None:
+            await interaction.response.send_message(
+                "Cannot determine channel.", ephemeral=True
+            )
+            return
+        ticket = self.get_ticket_by_channel(interaction.channel_id)
+        if not ticket:
+            await interaction.response.send_message(
+                "This command can only be used inside an active ticket channel.",
+                ephemeral=True,
+            )
+            return
+        from tickets.views.ticket_tools import TicketToolsView, build_tools_embed
+
+        view = TicketToolsView(self, ticket.ticket_id)
+        embed = build_tools_embed()
+        await interaction.response.send_message(embed=embed, view=view)
+
+    # -------------------------------------------------------------------------
+    # Type management
+    # -------------------------------------------------------------------------
+
+    async def get_closed_tickets_by_user(
+        self, user_id: int, limit: int = 25
+    ) -> list[TicketRecord]:
+        return await self.repo.get_tickets_by_user(
+            self.guild.id, user_id, status=TicketStatus.CLOSED.value, limit=limit
+        )
+
+    async def get_recent_tickets_by_user(
+        self, user_id: int, limit: int = 10
+    ) -> list[TicketRecord]:
+        return await self.repo.get_tickets_by_user(self.guild.id, user_id, limit=limit)
+
+    # -------------------------------------------------------------------------
+    # Transcript handler registry
+    # -------------------------------------------------------------------------
+
+    def register_handler(
+        self, name: str, handler: TranscriptHandler, *, enabled: bool = True
+    ) -> None:
+        self._transcript_handlers[name] = (handler, enabled)
+
+    def enable_handler(self, name: str) -> bool:
+        if name not in self._transcript_handlers:
+            return False
+        handler, _ = self._transcript_handlers[name]
+        self._transcript_handlers[name] = (handler, True)
+        return True
+
+    def disable_handler(self, name: str) -> bool:
+        if name not in self._transcript_handlers:
+            return False
+        handler, _ = self._transcript_handlers[name]
+        self._transcript_handlers[name] = (handler, False)
+        return True
+
+    def list_handlers(self) -> list[tuple[str, bool]]:
+        return [
+            (name, enabled) for name, (_, enabled) in self._transcript_handlers.items()
+        ]
+
+    def _active_handlers(self) -> list[TranscriptHandler]:
+        return [h for h, enabled in self._transcript_handlers.values() if enabled]
+
+    # -------------------------------------------------------------------------
+    # Type management
+    # -------------------------------------------------------------------------
+
+    async def enable_type(self, identifier: str) -> None:
+        self.type_registry.enable(identifier)
+        await self.refresh_panel()
+
+    async def disable_type(self, identifier: str) -> None:
+        self.type_registry.disable(identifier)
+        await self.refresh_panel()
+
+    # -------------------------------------------------------------------------
+    # Message hook (called from DiscordClient.on_message)
+    # -------------------------------------------------------------------------
+
+    async def handle_message(self, message: discord.Message) -> None:
+        """Reset the 24-hr inactivity timer and update first_staff_response_at."""
+        if not message.guild or message.author.bot:
+            return
+
+        ticket = self.active_tickets.get(message.channel.id)
+        if not ticket or ticket.is_frozen:
+            return
+
+        now = datetime.now(UTC)
+        ticket.record.last_message_at = now
+        await self.repo.update_ticket(ticket.ticket_id, last_message_at=now.isoformat())
+
+        # Track first staff response time
+        if (
+            ticket.record.first_staff_response_at is None
+            and isinstance(message.author, discord.Member)
+            and any(team.is_member(message.author) for team in ticket.ticket_type.teams)
+        ):
+            ticket.record.first_staff_response_at = now
+            await self.repo.update_ticket(
+                ticket.ticket_id, first_staff_response_at=now.isoformat()
+            )
+
+        # Reset the 24-hr timer
+        await self._cancel_timeout(ticket.ticket_id)
+        self._schedule_timeout(ticket, TICKET_TIMEOUT_SECONDS)
+
+    # -------------------------------------------------------------------------
+    # Timeout internals
+    # -------------------------------------------------------------------------
+
+    def _schedule_timeout(self, ticket: Ticket, delay: float) -> None:
+        task = asyncio.create_task(self._timeout_handler(ticket, delay))
+        self._timeout_tasks[ticket.ticket_id] = task
+        ticket._timeout_task = task
+
+    async def _cancel_timeout(self, ticket_id: int) -> None:
+        task = self._timeout_tasks.pop(ticket_id, None)
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    async def _timeout_handler(self, ticket: Ticket, delay: float) -> None:
+        try:
+            await asyncio.sleep(delay)
+            await self._auto_close(ticket)
+        except asyncio.CancelledError:
+            pass
+
+    async def _auto_close(self, ticket: Ticket) -> None:
+        bot_member = self.guild.me
+        if not bot_member:
+            logger.error(
+                f"Ticket #{ticket.ticket_id}: guild.me is None, cannot auto-close"
+            )
+            return
+        logger.info(f"Ticket #{ticket.ticket_id} auto-closing due to inactivity")
+        await self.close_ticket(
+            ticket_id=ticket.ticket_id,
+            closer=bot_member,
+            reason="This ticket was automatically closed due to 24 hours of inactivity.",
+            note="Auto-closed by timeout.",
+        )
+
+    # -------------------------------------------------------------------------
+    # Helpers
+    # -------------------------------------------------------------------------
+
+    def get_ticket_by_channel(self, channel_id: int) -> Ticket | None:
+        return self.active_tickets.get(channel_id)
+
+    def _get_by_ticket_id(self, ticket_id: int) -> Ticket | None:
+        for ticket in self.active_tickets.values():
+            if ticket.ticket_id == ticket_id:
+                return ticket
+        return None
+
+    def _get_archive_channel(self) -> discord.TextChannel | None:
+        from core.config import ConfigInterface, ConfigVars
+
+        cfg = ConfigInterface()
+        channel_id_str = cfg.get_variable(ConfigVars.ARCHIVE_CHANNEL_ID)
+        if channel_id_str:
+            ch = self.guild.get_channel(int(channel_id_str))
+            return ch if isinstance(ch, discord.TextChannel) else None
+        return None
+
+    async def _get_or_create_category(
+        self, name: str | None
+    ) -> discord.CategoryChannel:
+        target = name or "Tickets"
+        category = discord.utils.get(self.guild.categories, name=target)
+        if not category:
+            category = await self.guild.create_category(target)
+            logger.info(f"Created Discord category: {target}")
+        return category
