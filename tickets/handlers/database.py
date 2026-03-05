@@ -1,10 +1,11 @@
+import asyncio
 from datetime import datetime
 
 from loguru import logger
 from pymongo import ASCENDING, DESCENDING, AsyncMongoClient
 from pymongo.errors import PyMongoError
 
-from tickets.models.stats import HandlerStats, LeaderboardEntry
+from tickets.models.stats import HandlerStats, LeaderboardEntry, SystemStats
 from tickets.models.ticket import TicketRecord, TicketStatus
 from tickets.models.transcript import Transcript
 
@@ -236,7 +237,17 @@ class MongoTicketRepository:
         ]
 
         try:
-            cursor = await self._tickets.aggregate(pipeline)
+            participated_match: dict = {
+                "guild_id": guild_id,
+                "participants": staff_id,
+            }
+            if since is not None:
+                participated_match["created_at"] = {"$gte": since.isoformat()}
+
+            tickets_participated, cursor = await asyncio.gather(
+                self._tickets.count_documents(participated_match),
+                self._tickets.aggregate(pipeline),
+            )
             result = await cursor.to_list(length=1)
             if not result:
                 return None
@@ -259,6 +270,7 @@ class MongoTicketRepository:
             return HandlerStats(
                 staff_id=staff_id,
                 tickets_closed=totals["tickets_closed"],
+                tickets_participated=tickets_participated,
                 avg_response_seconds=avg_resp_ms / 1000 if avg_resp_ms else None,
                 avg_resolution_seconds=avg_res_ms / 1000 if avg_res_ms else None,
                 type_breakdown=type_breakdown,
@@ -335,3 +347,145 @@ class MongoTicketRepository:
         except PyMongoError as e:
             logger.error(f"get_leaderboard_stats failed for guild {guild_id}: {e}")
             return []
+
+    async def get_system_stats(
+        self,
+        guild_id: int,
+        since: datetime | None = None,
+    ) -> SystemStats:
+        """Return aggregated system-wide ticket statistics for the guild."""
+        match: dict = {"guild_id": guild_id}
+        if since is not None:
+            match["created_at"] = {"$gte": since.isoformat()}
+
+        pipeline = [
+            {"$match": match},
+            {
+                "$facet": {
+                    "opened": [{"$count": "total"}],
+                    "closed": [
+                        {
+                            "$match": {
+                                "status": {
+                                    "$in": [
+                                        TicketStatus.CLOSED.value,
+                                        TicketStatus.ARCHIVED.value,
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "$group": {
+                                "_id": None,
+                                "total": {"$sum": 1},
+                                "avg_resolution_ms": {
+                                    "$avg": {
+                                        "$cond": [
+                                            {
+                                                "$and": [
+                                                    {"$ne": ["$closed_at", None]},
+                                                    {"$ne": ["$created_at", None]},
+                                                ]
+                                            },
+                                            {
+                                                "$subtract": [
+                                                    {"$toDate": "$closed_at"},
+                                                    {"$toDate": "$created_at"},
+                                                ]
+                                            },
+                                            None,
+                                        ]
+                                    }
+                                },
+                                "avg_response_ms": {
+                                    "$avg": {
+                                        "$cond": [
+                                            {
+                                                "$and": [
+                                                    {
+                                                        "$ne": [
+                                                            "$first_staff_response_at",
+                                                            None,
+                                                        ]
+                                                    },
+                                                    {"$ne": ["$created_at", None]},
+                                                ]
+                                            },
+                                            {
+                                                "$subtract": [
+                                                    {
+                                                        "$toDate": "$first_staff_response_at"
+                                                    },
+                                                    {"$toDate": "$created_at"},
+                                                ]
+                                            },
+                                            None,
+                                        ]
+                                    }
+                                },
+                            }
+                        },
+                    ],
+                    "type_breakdown": [
+                        {"$group": {"_id": "$ticket_type", "count": {"$sum": 1}}}
+                    ],
+                }
+            },
+        ]
+
+        try:
+            currently_open = await self._tickets.count_documents(
+                {"guild_id": guild_id, "status": TicketStatus.OPEN.value}
+            )
+            cursor = await self._tickets.aggregate(pipeline)
+            result = await cursor.to_list(length=1)
+
+            if not result:
+                return SystemStats(
+                    total_opened=0,
+                    total_closed=0,
+                    currently_open=currently_open,
+                    avg_response_seconds=None,
+                    avg_resolution_seconds=None,
+                    type_breakdown={},
+                )
+
+            facet = result[0]
+            opened_list: list[dict] = facet.get("opened", [])
+            total_opened = opened_list[0]["total"] if opened_list else 0
+
+            closed_list: list[dict] = facet.get("closed", [])
+            if closed_list:
+                closed_data = closed_list[0]
+                total_closed = closed_data.get("total", 0)
+                avg_res_ms = closed_data.get("avg_resolution_ms")
+                avg_resp_ms = closed_data.get("avg_response_ms")
+            else:
+                total_closed = 0
+                avg_res_ms = None
+                avg_resp_ms = None
+
+            type_breakdown = {
+                doc["_id"]: doc["count"]
+                for doc in facet.get("type_breakdown", [])
+                if doc.get("_id") is not None
+            }
+
+            return SystemStats(
+                total_opened=total_opened,
+                total_closed=total_closed,
+                currently_open=currently_open,
+                avg_response_seconds=avg_resp_ms / 1000 if avg_resp_ms else None,
+                avg_resolution_seconds=avg_res_ms / 1000 if avg_res_ms else None,
+                type_breakdown=type_breakdown,
+            )
+        except PyMongoError as e:
+            logger.error(f"get_system_stats failed for guild {guild_id}: {e}")
+            return SystemStats(
+                total_opened=0,
+                total_closed=0,
+                currently_open=0,
+                avg_response_seconds=None,
+                avg_resolution_seconds=None,
+                type_breakdown={},
+            )

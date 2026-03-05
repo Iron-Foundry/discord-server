@@ -9,7 +9,7 @@ from loguru import logger
 
 from tickets.handlers.archive_channel import ArchiveChannelTicketRepository
 from tickets.handlers.database import MongoTicketRepository
-from tickets.models.stats import HandlerStats, LeaderboardEntry
+from tickets.models.stats import HandlerStats, LeaderboardEntry, SystemStats
 from tickets.models.ticket import (
     MemberSnapshot,
     ReopenEvent,
@@ -578,6 +578,10 @@ class TicketService:
         """Return aggregated handler stats for a staff member."""
         return await self.repo.get_handler_stats(self.guild.id, staff_id, since)
 
+    async def get_system_stats(self, since: datetime | None) -> SystemStats:
+        """Return aggregated system-wide ticket statistics."""
+        return await self.repo.get_system_stats(self.guild.id, since)
+
     async def get_leaderboard(
         self, since: datetime | None, limit: int = 10
     ) -> list[LeaderboardEntry]:
@@ -648,16 +652,20 @@ class TicketService:
         ticket.record.last_message_at = now
         await self.repo.update_ticket(ticket.ticket_id, last_message_at=now.isoformat())
 
-        # Track first staff response time
-        if (
-            ticket.record.first_staff_response_at is None
-            and isinstance(message.author, discord.Member)
-            and any(team.is_member(message.author) for team in ticket.ticket_type.teams)
+        # Track first staff response time and participation
+        if isinstance(message.author, discord.Member) and any(
+            team.is_member(message.author) for team in ticket.ticket_type.teams
         ):
-            ticket.record.first_staff_response_at = now
-            await self.repo.update_ticket(
-                ticket.ticket_id, first_staff_response_at=now.isoformat()
-            )
+            staff_id = message.author.id
+            updates: dict[str, object] = {}
+            if ticket.record.first_staff_response_at is None:
+                ticket.record.first_staff_response_at = now
+                updates["first_staff_response_at"] = now.isoformat()
+            if staff_id not in ticket.record.participants:
+                ticket.record.participants.append(staff_id)
+                updates["participants"] = ticket.record.participants
+            if updates:
+                await self.repo.update_ticket(ticket.ticket_id, **updates)
 
         # Reset the 24-hr timer
         await self._cancel_timeout(ticket.ticket_id)

@@ -81,6 +81,7 @@ class TicketRecord(BaseModel):
     close_reason: str | None = None  # DM'd to ticket creator
     staff_note: str | None = None  # internal, never shown to user
     first_staff_response_at: datetime | None = None
+    participants: list[int] = Field(default_factory=list)  # staff who sent ≥1 message
     assigned_staff: list[int] = Field(default_factory=list)
     reopen_history: list[ReopenEvent] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)  # type-specific fields

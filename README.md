@@ -79,6 +79,7 @@ Ticket lifecycle and management.
 | `/ticket list <user>` | List a member's recent tickets. | Staff |
 | `/ticket stats [user] [period]` | View handler statistics for a staff member (type breakdown, avg response/resolution time). Defaults to the invoking user and all-time. | Staff |
 | `/ticket leaderboard [period]` | Show top handlers ranked by tickets closed. Excludes bot auto-closures. | Staff |
+| `/ticket system [period]` | View overall system stats (volume, avg wait/response/resolution time). | Staff |
 | `/ticket panel <channel>` | Post the ticket creation panel to a channel. | Senior Staff |
 
 The `open` and `reopen` commands support autocomplete.

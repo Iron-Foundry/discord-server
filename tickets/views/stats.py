@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 import discord
 from loguru import logger
 
-from tickets.models.stats import HandlerStats, LeaderboardEntry
+from tickets.models.stats import HandlerStats, LeaderboardEntry, SystemStats
 
 if TYPE_CHECKING:
     from tickets.ticket_service import TicketService
@@ -52,6 +52,11 @@ def _build_stats_embed(
     )
     embed.add_field(name="Period", value=period_label, inline=True)
     embed.add_field(name="Tickets Closed", value=str(stats.tickets_closed), inline=True)
+    embed.add_field(
+        name="Tickets Participated In",
+        value=str(stats.tickets_participated),
+        inline=True,
+    )
     embed.add_field(
         name="Avg Response Time",
         value=_fmt_seconds(stats.avg_response_seconds),
@@ -254,6 +259,85 @@ class LeaderboardView(discord.ui.View):
             )
             for e in entries
         }
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            if hasattr(item, "disabled"):
+                item.disabled = True  # type: ignore[union-attr]
+
+
+def _build_system_embed(stats: SystemStats, period: str) -> discord.Embed:
+    """Build the embed for /ticket system."""
+    period_label = {
+        "7d": "Last 7 days",
+        "30d": "Last 30 days",
+        "90d": "Last 90 days",
+        "all": "All time",
+    }.get(period, period)
+
+    embed = discord.Embed(
+        title="Ticket System Overview",
+        color=discord.Color.blurple(),
+    )
+    embed.add_field(name="Period", value=period_label, inline=True)
+    embed.add_field(name="Tickets Opened", value=str(stats.total_opened), inline=True)
+    embed.add_field(name="Tickets Closed", value=str(stats.total_closed), inline=True)
+    embed.add_field(name="Currently Open", value=str(stats.currently_open), inline=True)
+    embed.add_field(
+        name="Avg Response Time",
+        value=_fmt_seconds(stats.avg_response_seconds),
+        inline=True,
+    )
+    embed.add_field(
+        name="Avg Resolution Time",
+        value=_fmt_seconds(stats.avg_resolution_seconds),
+        inline=True,
+    )
+    if stats.type_breakdown:
+        breakdown_lines = [
+            f"`{t.replace('_', ' ').title()}`: {c}"
+            for t, c in sorted(stats.type_breakdown.items(), key=lambda x: -x[1])
+        ]
+        embed.add_field(
+            name="Type Breakdown", value="\n".join(breakdown_lines), inline=False
+        )
+    return embed
+
+
+class SystemStatsView(discord.ui.View):
+    """Interactive view for /ticket system — period select."""
+
+    def __init__(self, service: TicketService, period: str = "all") -> None:
+        super().__init__(timeout=300)
+        self._service = service
+        self._period = period
+
+        period_select = discord.ui.Select(
+            placeholder="Period",
+            options=_PERIOD_OPTIONS,
+            row=0,
+        )
+        period_select.callback = self._on_period_change
+        self.add_item(period_select)
+
+    async def _on_period_change(self, interaction: discord.Interaction) -> None:
+        data: dict[str, Any] = interaction.data or {}  # type: ignore[assignment]
+        values: list[str] = data.get("values", [])
+        if not values:
+            await interaction.response.defer()
+            return
+        self._period = values[0]
+        since = _parse_period(self._period)
+
+        try:
+            stats = await self._service.get_system_stats(since)
+        except Exception as e:
+            logger.error(f"SystemStatsView: get_system_stats failed: {e}")
+            await interaction.response.defer()
+            return
+
+        embed = _build_system_embed(stats, self._period)
+        await interaction.response.edit_message(embed=embed, view=self)
 
     async def on_timeout(self) -> None:
         for item in self.children:

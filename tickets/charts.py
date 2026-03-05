@@ -9,7 +9,7 @@ import discord
 import plotly.graph_objects as go
 from loguru import logger
 
-from tickets.models.stats import HandlerStats, LeaderboardEntry
+from tickets.models.stats import HandlerStats, LeaderboardEntry, SystemStats
 
 _BG = "#313338"
 _GRID = "#383a40"
@@ -127,4 +127,38 @@ async def build_leaderboard_chart(
         return await _render(fig, "leaderboard.png", width=700, height=400)
     except Exception as e:
         logger.warning(f"Failed to render leaderboard chart: {e}")
+        return None
+
+
+async def build_system_chart(stats: SystemStats) -> discord.File | None:
+    """Horizontal bar chart of ticket type breakdown for the system overview.
+
+    Returns None if chart rendering fails.
+    """
+    if stats.type_breakdown:
+        types = list(stats.type_breakdown.keys())
+        counts = [stats.type_breakdown[t] for t in types]
+        labels = [t.replace("_", " ").title() for t in types]
+    else:
+        labels, counts = ["No data"], [0]
+
+    fig = go.Figure(
+        go.Bar(
+            x=counts,
+            y=labels,
+            orientation="h",
+            marker_color=_BAR,
+            text=counts,
+            textposition="outside",
+            textfont={"color": _TEXT},
+        )
+    )
+    _apply_base_layout(fig)
+    fig.update_layout(  # type: ignore[call-arg]
+        title={"text": "Tickets by Type — System Overview", "font": {"color": _TEXT}},
+    )
+    try:
+        return await _render(fig, "system.png", width=700, height=350)
+    except Exception as e:
+        logger.warning(f"Failed to render system chart: {e}")
         return None

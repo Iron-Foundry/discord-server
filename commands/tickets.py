@@ -93,6 +93,11 @@ def register_help(registry: HelpRegistry) -> None:
                     "Show top handlers ranked by tickets closed",
                     "Staff",
                 ),
+                HelpEntry(
+                    "/ticket system [period]",
+                    "View overall system stats: volumes, avg wait/response/resolution times",
+                    "Staff",
+                ),
             ],
         )
     )
@@ -593,6 +598,44 @@ class TicketGroup(
             logger.exception("Unhandled error in /ticket leaderboard")
             await interaction.followup.send(
                 "An error occurred while fetching the leaderboard.", ephemeral=True
+            )
+
+    # ------------------------------------------------------------------
+    # /ticket system [period]
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="system", description="View overall ticket system statistics"
+    )
+    @app_commands.describe(period="Time period to filter by")
+    @app_commands.choices(period=_PERIOD_CHOICES)
+    @is_staff()
+    async def system(
+        self,
+        interaction: discord.Interaction,
+        period: str = "all",
+    ) -> None:
+        from tickets.charts import build_system_chart
+        from tickets.views.stats import SystemStatsView, _build_system_embed
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        try:
+            since = _parse_period(period)
+            stats = await self._service.get_system_stats(since)
+            embed = _build_system_embed(stats, period)
+            view = SystemStatsView(self._service, period)
+            chart = await build_system_chart(stats)
+            if chart:
+                await interaction.followup.send(
+                    embed=embed, file=chart, view=view, ephemeral=True
+                )
+            else:
+                await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+        except Exception:
+            logger.exception("Unhandled error in /ticket system")
+            await interaction.followup.send(
+                "An error occurred while fetching system stats.", ephemeral=True
             )
 
 
