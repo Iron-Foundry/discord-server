@@ -39,13 +39,14 @@ class DiscordClient(discord.Client):
     async def _resolve_guild(self) -> None:
         """Look up the configured guild and bind it to the command handler."""
         guild_id_str: str | None = self.config.get_variable(ConfigVars.GUILD_ID)
-        if guild_id_str:
-            self._guild = self.get_guild(int(guild_id_str))
-            if self._guild:
-                self.command_handler.guild = self._guild
-                logger.info(f"Guild set to: {self._guild.name}")
-            else:
-                logger.error(f"Guild with ID {guild_id_str} not found")
+        if not guild_id_str:
+            return
+        try:
+            self._guild = await self.fetch_guild(int(guild_id_str))
+            self.command_handler.guild = self._guild
+            logger.info(f"Guild set to: {self._guild.name}")
+        except Exception:
+            logger.exception(f"Could not fetch guild with ID {guild_id_str}")
 
     async def _init_services(self) -> None:
         """Fetch mongo credentials once and load all services in parallel."""
@@ -78,9 +79,6 @@ class DiscordClient(discord.Client):
         await self._resolve_guild()
 
         if not self._guild:
-            logger.warning(
-                "Guild not available during setup_hook; services deferred to on_ready"
-            )
             return
 
         await self._init_services()
