@@ -518,7 +518,7 @@ class TicketGroup(
         from tickets.charts import build_stats_chart
         from tickets.views.stats import StatsView, _build_stats_embed
 
-        await interaction.response.defer(ephemeral=True, thinking=True)
+        await interaction.response.defer(thinking=True)
 
         try:
             target = user if user is not None else interaction.user
@@ -537,14 +537,14 @@ class TicketGroup(
                 return
 
             embed = _build_stats_embed(handler_stats, target.display_name, period)
-            view = StatsView(self._service, target.id, target.display_name, period)
-            chart = await build_stats_chart(handler_stats, target.display_name)
+            chart = await build_stats_chart(handler_stats, target.display_name, period)
             if chart:
-                await interaction.followup.send(
-                    embed=embed, file=chart, view=view, ephemeral=True
-                )
+                embed.set_image(url="attachment://stats.png")
+            view = StatsView(self._service, target.id, target.display_name, period)
+            if chart:
+                await interaction.followup.send(embed=embed, file=chart, view=view)
             else:
-                await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                await interaction.followup.send(embed=embed, view=view)
         except Exception:
             logger.exception("Unhandled error in /ticket stats")
             await interaction.followup.send(
@@ -569,7 +569,7 @@ class TicketGroup(
         from tickets.charts import build_leaderboard_chart
         from tickets.views.stats import LeaderboardView, _build_leaderboard_embed
 
-        await interaction.response.defer(ephemeral=True, thinking=True)
+        await interaction.response.defer(thinking=True)
 
         try:
             since = _parse_period(period)
@@ -586,14 +586,14 @@ class TicketGroup(
                 }
 
             embed = _build_leaderboard_embed(entries, names, period, "closed")
-            view = LeaderboardView(self._service, period, "closed")
-            chart = await build_leaderboard_chart(entries, names, "closed")
+            chart = await build_leaderboard_chart(entries, names, "closed", period)
             if chart:
-                await interaction.followup.send(
-                    embed=embed, file=chart, view=view, ephemeral=True
-                )
+                embed.set_image(url="attachment://leaderboard.png")
+            view = LeaderboardView(self._service, period, "closed")
+            if chart:
+                await interaction.followup.send(embed=embed, file=chart, view=view)
             else:
-                await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                await interaction.followup.send(embed=embed, view=view)
         except Exception:
             logger.exception("Unhandled error in /ticket leaderboard")
             await interaction.followup.send(
@@ -618,20 +618,20 @@ class TicketGroup(
         from tickets.charts import build_system_chart
         from tickets.views.stats import SystemStatsView, _build_system_embed
 
-        await interaction.response.defer(ephemeral=True, thinking=True)
+        await interaction.response.defer(thinking=True)
 
         try:
             since = _parse_period(period)
             stats = await self._service.get_system_stats(since)
             embed = _build_system_embed(stats, period)
-            view = SystemStatsView(self._service, period)
-            chart = await build_system_chart(stats)
+            chart = await build_system_chart(stats, period)
             if chart:
-                await interaction.followup.send(
-                    embed=embed, file=chart, view=view, ephemeral=True
-                )
+                embed.set_image(url="attachment://system.png")
+            view = SystemStatsView(self._service, period)
+            if chart:
+                await interaction.followup.send(embed=embed, file=chart, view=view)
             else:
-                await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                await interaction.followup.send(embed=embed, view=view)
         except Exception:
             logger.exception("Unhandled error in /ticket system")
             await interaction.followup.send(

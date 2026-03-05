@@ -8,6 +8,11 @@ from typing import TYPE_CHECKING, Any
 import discord
 from loguru import logger
 
+from tickets.charts import (
+    build_leaderboard_chart,
+    build_stats_chart,
+    build_system_chart,
+)
 from tickets.models.stats import HandlerStats, LeaderboardEntry, SystemStats
 
 if TYPE_CHECKING:
@@ -105,6 +110,8 @@ def _build_leaderboard_embed(
         name = names.get(entry.staff_id, f"<@{entry.staff_id}>")
         if metric == "resolution":
             value = f"Avg Resolution: **{_fmt_seconds(entry.avg_resolution_seconds)}**"
+        elif metric == "participated":
+            value = f"Tickets Participated In: **{entry.tickets_participated}**"
         else:
             value = f"Tickets Closed: **{entry.tickets_closed}**"
         embed.add_field(
@@ -115,13 +122,46 @@ def _build_leaderboard_embed(
     return embed
 
 
-class StatsView(discord.ui.View):
-    """Interactive view for /ticket stats — period select.
+def _build_system_embed(stats: SystemStats, period: str) -> discord.Embed:
+    """Build the embed for /ticket system."""
+    period_label = {
+        "7d": "Last 7 days",
+        "30d": "Last 30 days",
+        "90d": "Last 90 days",
+        "all": "All time",
+    }.get(period, period)
 
-    Updating the embed on period change. The chart image (sent with the
-    initial response) is preserved by discord.py automatically since
-    edit_message does not touch attachments unless explicitly instructed.
-    """
+    embed = discord.Embed(
+        title="Ticket System Overview",
+        color=discord.Color.blurple(),
+    )
+    embed.add_field(name="Period", value=period_label, inline=True)
+    embed.add_field(name="Tickets Opened", value=str(stats.total_opened), inline=True)
+    embed.add_field(name="Tickets Closed", value=str(stats.total_closed), inline=True)
+    embed.add_field(name="Currently Open", value=str(stats.currently_open), inline=True)
+    embed.add_field(
+        name="Avg Response Time",
+        value=_fmt_seconds(stats.avg_response_seconds),
+        inline=True,
+    )
+    embed.add_field(
+        name="Avg Resolution Time",
+        value=_fmt_seconds(stats.avg_resolution_seconds),
+        inline=True,
+    )
+    if stats.type_breakdown:
+        breakdown_lines = [
+            f"`{t.replace('_', ' ').title()}`: {c}"
+            for t, c in sorted(stats.type_breakdown.items(), key=lambda x: -x[1])
+        ]
+        embed.add_field(
+            name="Type Breakdown", value="\n".join(breakdown_lines), inline=False
+        )
+    return embed
+
+
+class StatsView(discord.ui.View):
+    """Interactive view for /ticket stats — period select."""
 
     def __init__(
         self,
@@ -160,6 +200,7 @@ class StatsView(discord.ui.View):
             await interaction.response.defer()
             return
 
+        chart: discord.File | None = None
         if stats is None:
             embed = discord.Embed(
                 title=f"Ticket Stats — {self._display_name}",
@@ -168,8 +209,15 @@ class StatsView(discord.ui.View):
             )
         else:
             embed = _build_stats_embed(stats, self._display_name, self._period)
+            chart = await build_stats_chart(stats, self._display_name, self._period)
+            if chart:
+                embed.set_image(url="attachment://stats.png")
 
-        await interaction.response.edit_message(embed=embed, view=self)
+        await interaction.response.edit_message(
+            embed=embed,
+            attachments=[chart] if chart else [],
+            view=self,
+        )
 
     async def on_timeout(self) -> None:
         for item in self.children:
@@ -178,10 +226,7 @@ class StatsView(discord.ui.View):
 
 
 class LeaderboardView(discord.ui.View):
-    """Interactive view for /ticket leaderboard — period select + metric select.
-
-    The chart image from the initial response is preserved automatically.
-    """
+    """Interactive view for /ticket leaderboard — period select + metric select."""
 
     def __init__(
         self,
@@ -207,6 +252,9 @@ class LeaderboardView(discord.ui.View):
             options=[
                 discord.SelectOption(label="Tickets Closed", value="closed"),
                 discord.SelectOption(label="Avg Resolution Time", value="resolution"),
+                discord.SelectOption(
+                    label="Tickets Participated In", value="participated"
+                ),
             ],
             row=1,
         )
@@ -216,7 +264,7 @@ class LeaderboardView(discord.ui.View):
     async def _fetch_and_edit(self, interaction: discord.Interaction) -> None:
         since = _parse_period(self._period)
         try:
-            entries = await self._service.get_leaderboard(since)
+            entries = await self._service.get_leaderboard(since, metric=self._metric)
         except Exception as e:
             logger.error(f"LeaderboardView: get_leaderboard failed: {e}")
             await interaction.response.defer()
@@ -224,7 +272,17 @@ class LeaderboardView(discord.ui.View):
 
         names = self._resolve_names(entries, interaction.guild)
         embed = _build_leaderboard_embed(entries, names, self._period, self._metric)
-        await interaction.response.edit_message(embed=embed, view=self)
+        chart = await build_leaderboard_chart(
+            entries, names, self._metric, self._period
+        )
+        if chart:
+            embed.set_image(url="attachment://leaderboard.png")
+
+        await interaction.response.edit_message(
+            embed=embed,
+            attachments=[chart] if chart else [],
+            view=self,
+        )
 
     async def _on_period_change(self, interaction: discord.Interaction) -> None:
         data: dict[str, Any] = interaction.data or {}  # type: ignore[assignment]
@@ -266,44 +324,6 @@ class LeaderboardView(discord.ui.View):
                 item.disabled = True  # type: ignore[union-attr]
 
 
-def _build_system_embed(stats: SystemStats, period: str) -> discord.Embed:
-    """Build the embed for /ticket system."""
-    period_label = {
-        "7d": "Last 7 days",
-        "30d": "Last 30 days",
-        "90d": "Last 90 days",
-        "all": "All time",
-    }.get(period, period)
-
-    embed = discord.Embed(
-        title="Ticket System Overview",
-        color=discord.Color.blurple(),
-    )
-    embed.add_field(name="Period", value=period_label, inline=True)
-    embed.add_field(name="Tickets Opened", value=str(stats.total_opened), inline=True)
-    embed.add_field(name="Tickets Closed", value=str(stats.total_closed), inline=True)
-    embed.add_field(name="Currently Open", value=str(stats.currently_open), inline=True)
-    embed.add_field(
-        name="Avg Response Time",
-        value=_fmt_seconds(stats.avg_response_seconds),
-        inline=True,
-    )
-    embed.add_field(
-        name="Avg Resolution Time",
-        value=_fmt_seconds(stats.avg_resolution_seconds),
-        inline=True,
-    )
-    if stats.type_breakdown:
-        breakdown_lines = [
-            f"`{t.replace('_', ' ').title()}`: {c}"
-            for t, c in sorted(stats.type_breakdown.items(), key=lambda x: -x[1])
-        ]
-        embed.add_field(
-            name="Type Breakdown", value="\n".join(breakdown_lines), inline=False
-        )
-    return embed
-
-
 class SystemStatsView(discord.ui.View):
     """Interactive view for /ticket system — period select."""
 
@@ -337,7 +357,15 @@ class SystemStatsView(discord.ui.View):
             return
 
         embed = _build_system_embed(stats, self._period)
-        await interaction.response.edit_message(embed=embed, view=self)
+        chart = await build_system_chart(stats, self._period)
+        if chart:
+            embed.set_image(url="attachment://system.png")
+
+        await interaction.response.edit_message(
+            embed=embed,
+            attachments=[chart] if chart else [],
+            view=self,
+        )
 
     async def on_timeout(self) -> None:
         for item in self.children:

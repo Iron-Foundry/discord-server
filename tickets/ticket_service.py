@@ -583,13 +583,13 @@ class TicketService:
         return await self.repo.get_system_stats(self.guild.id, since)
 
     async def get_leaderboard(
-        self, since: datetime | None, limit: int = 10
+        self, since: datetime | None, limit: int = 10, metric: str = "closed"
     ) -> list[LeaderboardEntry]:
-        """Return the top handlers ranked by tickets closed, excluding the bot."""
+        """Return the top handlers ranked by the given metric, excluding the bot."""
         bot_id = self.guild.me.id if self.guild.me else None
         exclude = [bot_id] if bot_id else []
         return await self.repo.get_leaderboard_stats(
-            self.guild.id, since, limit, exclude
+            self.guild.id, since, limit, exclude, metric
         )
 
     # -------------------------------------------------------------------------

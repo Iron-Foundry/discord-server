@@ -285,8 +285,19 @@ class MongoTicketRepository:
         since: datetime | None = None,
         limit: int = 10,
         exclude_ids: list[int] | None = None,
+        metric: str = "closed",
     ) -> list[LeaderboardEntry]:
-        """Return top handlers ranked by tickets closed."""
+        """Return top handlers ranked by the given metric.
+
+        Args:
+            metric: ``"closed"`` ranks by tickets closed; ``"resolution"`` by avg
+                resolution time; ``"participated"`` by tickets participated in.
+        """
+        if metric == "participated":
+            return await self._get_participated_leaderboard(
+                guild_id, since, limit, exclude_ids
+            )
+
         match: dict = {
             "guild_id": guild_id,
             "status": {"$in": [TicketStatus.CLOSED.value, TicketStatus.ARCHIVED.value]},
@@ -346,6 +357,46 @@ class MongoTicketRepository:
             return entries
         except PyMongoError as e:
             logger.error(f"get_leaderboard_stats failed for guild {guild_id}: {e}")
+            return []
+
+    async def _get_participated_leaderboard(
+        self,
+        guild_id: int,
+        since: datetime | None,
+        limit: int,
+        exclude_ids: list[int] | None,
+    ) -> list[LeaderboardEntry]:
+        """Return top handlers ranked by tickets participated in."""
+        match: dict = {"guild_id": guild_id}
+        if since is not None:
+            match["created_at"] = {"$gte": since.isoformat()}
+
+        pipeline = [
+            {"$match": match},
+            {"$unwind": "$participants"},
+            {"$match": {"participants": {"$nin": exclude_ids or []}}},
+            {"$group": {"_id": "$participants", "tickets_participated": {"$sum": 1}}},
+            {"$sort": {"tickets_participated": DESCENDING}},
+            {"$limit": limit},
+        ]
+
+        try:
+            cursor = await self._tickets.aggregate(pipeline)
+            docs = await cursor.to_list(length=limit)
+            return [
+                LeaderboardEntry(
+                    rank=rank,
+                    staff_id=doc["_id"],
+                    tickets_closed=0,
+                    avg_resolution_seconds=None,
+                    tickets_participated=doc["tickets_participated"],
+                )
+                for rank, doc in enumerate(docs, start=1)
+            ]
+        except PyMongoError as e:
+            logger.error(
+                f"_get_participated_leaderboard failed for guild {guild_id}: {e}"
+            )
             return []
 
     async def get_system_stats(

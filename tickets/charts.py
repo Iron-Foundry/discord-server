@@ -16,6 +16,13 @@ _GRID = "#383a40"
 _TEXT = "#dbdee1"
 _BAR = "#5865F2"
 
+_PERIOD_LABELS: dict[str, str] = {
+    "7d": "Last 7 Days",
+    "30d": "Last 30 Days",
+    "90d": "Last 90 Days",
+    "all": "All Time",
+}
+
 
 def _apply_base_layout(fig: go.Figure) -> None:
     """Apply the shared dark Discord-themed layout to a figure."""
@@ -40,12 +47,14 @@ async def _render(
 
 
 async def build_stats_chart(
-    stats: HandlerStats, display_name: str
+    stats: HandlerStats, display_name: str, period: str = "all"
 ) -> discord.File | None:
     """Horizontal bar chart of ticket type breakdown for a single handler.
 
     Returns None if chart rendering fails.
     """
+    period_label = _PERIOD_LABELS.get(period, period)
+
     if stats.type_breakdown:
         types = list(stats.type_breakdown.keys())
         counts = [stats.type_breakdown[t] for t in types]
@@ -66,7 +75,10 @@ async def build_stats_chart(
     )
     _apply_base_layout(fig)
     fig.update_layout(  # type: ignore[call-arg]
-        title={"text": f"Tickets by Type — {display_name}", "font": {"color": _TEXT}},
+        title={
+            "text": f"Tickets by Type — {display_name} ({period_label})",
+            "font": {"color": _TEXT},
+        },
     )
     try:
         return await _render(fig, "stats.png", width=700, height=350)
@@ -79,19 +91,22 @@ async def build_leaderboard_chart(
     entries: list[LeaderboardEntry],
     names: dict[int, str],
     metric: str = "closed",
+    period: str = "all",
 ) -> discord.File | None:
     """Vertical bar chart for the leaderboard.
 
     Args:
         entries: Ranked leaderboard entries.
         names: Mapping of staff_id → display name.
-        metric: ``"closed"`` for ticket count; ``"resolution"`` for avg hours.
+        metric: ``"closed"``, ``"resolution"``, or ``"participated"``.
+        period: Period key used in the chart title.
 
     Returns None if chart rendering fails or there are no entries.
     """
     if not entries:
         return None
 
+    period_label = _PERIOD_LABELS.get(period, period)
     labels = [names.get(e.staff_id, str(e.staff_id)) for e in entries]
 
     if metric == "resolution":
@@ -102,11 +117,15 @@ async def build_leaderboard_chart(
             for e in entries
         ]
         y_title = "Avg Resolution (hours)"
-        chart_title = "Ticket Leaderboard — Avg Resolution Time"
+        chart_title = f"Ticket Leaderboard — Avg Resolution Time ({period_label})"
+    elif metric == "participated":
+        values = [e.tickets_participated for e in entries]
+        y_title = "Tickets Participated In"
+        chart_title = f"Ticket Leaderboard — Tickets Participated In ({period_label})"
     else:
         values = [e.tickets_closed for e in entries]
         y_title = "Tickets Closed"
-        chart_title = "Ticket Leaderboard — Tickets Closed"
+        chart_title = f"Ticket Leaderboard — Tickets Closed ({period_label})"
 
     fig = go.Figure(
         go.Bar(
@@ -130,11 +149,15 @@ async def build_leaderboard_chart(
         return None
 
 
-async def build_system_chart(stats: SystemStats) -> discord.File | None:
+async def build_system_chart(
+    stats: SystemStats, period: str = "all"
+) -> discord.File | None:
     """Horizontal bar chart of ticket type breakdown for the system overview.
 
     Returns None if chart rendering fails.
     """
+    period_label = _PERIOD_LABELS.get(period, period)
+
     if stats.type_breakdown:
         types = list(stats.type_breakdown.keys())
         counts = [stats.type_breakdown[t] for t in types]
@@ -155,7 +178,10 @@ async def build_system_chart(stats: SystemStats) -> discord.File | None:
     )
     _apply_base_layout(fig)
     fig.update_layout(  # type: ignore[call-arg]
-        title={"text": "Tickets by Type — System Overview", "font": {"color": _TEXT}},
+        title={
+            "text": f"Tickets by Type — System Overview ({period_label})",
+            "font": {"color": _TEXT},
+        },
     )
     try:
         return await _render(fig, "system.png", width=700, height=350)

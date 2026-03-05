@@ -21,6 +21,7 @@ class LeaderboardEntry:
     staff_id: int
     tickets_closed: int
     avg_resolution_seconds: float | None
+    tickets_participated: int = 0
 
 
 @dataclass
