@@ -3,7 +3,6 @@ from collections.abc import Callable, Coroutine
 from datetime import datetime, UTC
 from typing import Any
 
-from common.regions import REGION_OPTIONS
 from common.ticket_types import TicketTypeId
 from tickets.models.ticket import TicketTypeConfig, TicketTeam, TicketRecord
 
@@ -19,12 +18,10 @@ class ApplyStaffModal(discord.ui.Modal, title="Staff Application"):
         placeholder="e.g. 2 years moderating Discord servers",
         max_length=200,
     )
-    region = discord.ui.Select(
-        placeholder="Select your region...",
-        options=REGION_OPTIONS,
-        min_values=1,
-        max_values=1,
-        required=True,
+    region = discord.ui.TextInput(
+        label="Region",
+        placeholder="North America, Europe, Oceania, Asia, South America, Africa / Middle East",
+        max_length=30,
     )
     reason = discord.ui.TextInput(
         label="Why do you want to be staff?",
@@ -46,7 +43,7 @@ class ApplyStaffModal(discord.ui.Modal, title="Staff Application"):
         metadata = {
             "rsn": self.rsn.value,
             "experience": self.experience.value,
-            "region": self.region.values[0],
+            "region": self.region.value,
             "reason": self.reason.value,
         }
         await self._callback(interaction, metadata)

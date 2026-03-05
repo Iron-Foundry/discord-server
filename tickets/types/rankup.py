@@ -3,25 +3,22 @@ from collections.abc import Callable, Coroutine
 from datetime import datetime, UTC
 from typing import Any
 
-from common.ranks import RANK_OPTIONS
 from common.ticket_types import TicketTypeId
 from tickets.models.ticket import TicketTypeConfig, TicketTeam, TicketRecord
 
+_RANK_HINT = "Sapphire, Emerald, Ruby, Diamond, Dragonstone, Onyx, Zenyte"
+
 
 class RankupModal(discord.ui.Modal, title="Rank Up Application"):
-    current_rank = discord.ui.Select(
-        placeholder="Current rank...",
-        options=RANK_OPTIONS,
-        min_values=1,
-        max_values=1,
-        required=True,
+    current_rank = discord.ui.TextInput(
+        label="Current Rank",
+        placeholder=_RANK_HINT,
+        max_length=20,
     )
-    target_rank = discord.ui.Select(
-        placeholder="Applying for...",
-        options=RANK_OPTIONS,
-        min_values=1,
-        max_values=1,
-        required=True,
+    target_rank = discord.ui.TextInput(
+        label="Applying For",
+        placeholder=_RANK_HINT,
+        max_length=20,
     )
 
     def __init__(
@@ -35,8 +32,8 @@ class RankupModal(discord.ui.Modal, title="Rank Up Application"):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         metadata = {
-            "current_rank": self.current_rank.values[0],
-            "target_rank": self.target_rank.values[0],
+            "current_rank": self.current_rank.value,
+            "target_rank": self.target_rank.value,
         }
         await self._callback(interaction, metadata)
 

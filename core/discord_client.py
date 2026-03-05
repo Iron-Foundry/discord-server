@@ -108,6 +108,7 @@ class DiscordClient(discord.Client):
         """Propagate the live gateway guild to all already-loaded services."""
         if self.ticket_service:
             self.ticket_service.guild = guild
+            self.ticket_service.try_register_archive_handler()
         if self.role_service:
             self.role_service._guild = guild
         if self.action_log_service:

@@ -671,6 +671,20 @@ class TicketService:
                 return ticket
         return None
 
+    def try_register_archive_handler(self) -> None:
+        """Register the archive channel handler if the channel is now resolvable.
+
+        Called after on_ready when the live guild cache has channels populated.
+        """
+        if "archive_channel" in self._transcript_handlers:
+            return
+        archive = self._get_archive_channel()
+        if archive:
+            self.register_handler(
+                "archive_channel", ArchiveChannelTicketRepository(archive)
+            )
+            logger.info(f"ArchiveChannelTicketRepository registered → #{archive.name}")
+
     def _get_archive_channel(self) -> discord.TextChannel | None:
         from core.config import ConfigInterface, ConfigVars
 
