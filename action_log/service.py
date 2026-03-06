@@ -16,9 +16,10 @@ from action_log.models import (
 from action_log.registrar import EventRegistrar
 from action_log.repository import MongoActionLogRepository
 from action_log.throttle import MessageThrottle
+from core.service_base import Service
 
 
-class ActionLogService:
+class ActionLogService(Service):
     """
     Coordinates the action log forum channel.
 
@@ -150,8 +151,3 @@ class ActionLogService:
     def config(self) -> ActionLogConfig | None:
         """Current action log config, or None if not yet configured."""
         return self._config
-
-    @property
-    def guild(self) -> discord.Guild:
-        """The guild this action log monitors."""
-        return self._guild

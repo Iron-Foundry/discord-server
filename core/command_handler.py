@@ -29,7 +29,7 @@ class FoundryCommandTree(app_commands.CommandTree):
 
 
 class CommandHandler:
-    _instance: Optional[CommandHandler] = None
+    _instance: Optional["CommandHandler"] = None
     _tree: Optional[app_commands.CommandTree] = None
     _guild: Optional[discord.Guild] = None
     _client: Optional[discord.Client] = None

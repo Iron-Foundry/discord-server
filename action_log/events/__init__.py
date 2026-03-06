@@ -15,7 +15,6 @@ from . import (
     roles,
     scheduled,
     threads,
-    voice,
 )
 
 
@@ -29,5 +28,4 @@ def register_all_events(registrar: EventRegistrar) -> None:
     guild.register(registrar)
     moderation.register(registrar)
     scheduled.register(registrar)
-    voice.register(registrar)
     invites.register(registrar)

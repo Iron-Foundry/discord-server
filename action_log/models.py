@@ -16,7 +16,6 @@ class LogCategory(StrEnum):
     GUILD = "guild"
     MODERATION = "moderation"
     SCHEDULED = "scheduled-events"
-    VOICE = "voice"
     INVITES = "invites"
 
 
@@ -28,7 +27,6 @@ CATEGORY_LABELS: dict[LogCategory, str] = {
     LogCategory.GUILD: "Guild",
     LogCategory.MODERATION: "Moderation",
     LogCategory.SCHEDULED: "Scheduled Events",
-    LogCategory.VOICE: "Voice",
     LogCategory.INVITES: "Invites",
 }
 
@@ -40,7 +38,6 @@ CATEGORY_COLORS: dict[LogCategory, discord.Color] = {
     LogCategory.GUILD: discord.Color.teal(),
     LogCategory.MODERATION: discord.Color.red(),
     LogCategory.SCHEDULED: discord.Color.orange(),
-    LogCategory.VOICE: discord.Color.dark_blue(),
     LogCategory.INVITES: discord.Color.dark_green(),
 }
 

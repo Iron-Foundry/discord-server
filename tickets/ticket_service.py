@@ -25,10 +25,12 @@ from tickets.models.transcript import (
     TranscriptHandler,
 )
 
+from core.service_base import Service
+
 TICKET_TIMEOUT_SECONDS = 86_400  # 24 hours
 
 
-class TicketService:
+class TicketService(Service):
     """
     Central coordinator for the ticket system.
 

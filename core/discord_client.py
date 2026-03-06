@@ -1,19 +1,22 @@
+from __future__ import annotations
+
 import asyncio
 from collections.abc import Callable, Coroutine
 from typing import TYPE_CHECKING, Any, override
 
 import discord
-from discord import app_commands
 from loguru import logger
 
 from commands.help_registry import HelpRegistry
 from core.command_handler import CommandHandler
 from core.config import ConfigInterface, ConfigVars
+from core.service_handler import ServiceHandler
 from core.service_loader import load_all_services
 
 if TYPE_CHECKING:
     from action_log.service import ActionLogService
     from broadcast.service import BroadcastService
+    from join_roles.service import JoinRoleService
     from roles.service import RoleService
     from tickets.ticket_service import TicketService
 
@@ -26,15 +29,18 @@ class DiscordClient(discord.Client):
         self.debug: bool = debug
         self.command_handler: CommandHandler = CommandHandler(client=self)
         self.help_registry: HelpRegistry = HelpRegistry()
+        self.service_handler: ServiceHandler = ServiceHandler()
         self._services_loaded: bool = False
         self._bg_tasks: set[asyncio.Task[Any]] = set()
         self._extra_listeners: dict[
             str, list[Callable[..., Coroutine[Any, Any, None]]]
         ] = {}
+        # Named references for services called directly from the client
         self.ticket_service: TicketService | None = None
         self.role_service: RoleService | None = None
         self.action_log_service: ActionLogService | None = None
         self.broadcast_service: BroadcastService | None = None
+        self.join_role_service: JoinRoleService | None = None
 
     async def _resolve_guild(self) -> None:
         """Look up the configured guild and bind it to the command handler."""
@@ -58,12 +64,7 @@ class DiscordClient(discord.Client):
             return
 
         assert self._guild is not None
-        (
-            self.ticket_service,
-            self.role_service,
-            self.action_log_service,
-            self.broadcast_service,
-        ) = await load_all_services(
+        services = await load_all_services(
             guild=self._guild,
             tree=self.command_handler.tree,
             registry=self.help_registry,
@@ -71,6 +72,14 @@ class DiscordClient(discord.Client):
             mongo_uri=mongo_uri,
             db_name=db_name,
         )
+        (
+            self.ticket_service,
+            self.role_service,
+            self.action_log_service,
+            self.broadcast_service,
+            self.join_role_service,
+        ) = services
+        self.service_handler.register(*services)
         self._services_loaded = True
 
     @override
@@ -88,36 +97,19 @@ class DiscordClient(discord.Client):
             logger.error("Failed to connect.")
             return
         logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
-
-        # fetch_guild() (used in setup_hook) returns a static REST snapshot —
-        # it has no cached members and doesn't update from gateway events.
-        # Replace it with the live gateway-managed guild now that we're connected.
         if self._guild:
             live = self.get_guild(self._guild.id)
             if live:
                 self._guild = live
-                self._refresh_service_guilds(live)
+                self.service_handler.refresh_guilds(live)
                 logger.debug(f"Guild reference refreshed to live cache ({live.name})")
 
         if not self._services_loaded and self._guild:
             await self._init_services()
 
-        # Run post-ready setup for services that need the populated guild cache
-        if self.ticket_service:
-            await self.ticket_service.post_ready()
+        await self.service_handler.run_post_ready()
 
         logger.info(await self.command_handler.sync())
-
-    def _refresh_service_guilds(self, guild: discord.Guild) -> None:
-        """Propagate the live gateway guild to all already-loaded services."""
-        if self.ticket_service:
-            self.ticket_service.guild = guild
-        if self.role_service:
-            self.role_service._guild = guild
-        if self.action_log_service:
-            self.action_log_service._guild = guild
-        if self.broadcast_service:
-            self.broadcast_service._guild = guild
 
     async def on_message(self, message: discord.Message) -> None:
         if message.author.bot or not message.guild:
@@ -148,5 +140,5 @@ class DiscordClient(discord.Client):
         return self._guild
 
     @property
-    def tree(self) -> app_commands.CommandTree:
+    def tree(self) -> discord.app_commands.CommandTree:
         return self.command_handler.tree

@@ -6,12 +6,13 @@ from uuid import uuid4
 import discord
 from loguru import logger
 
+from core.service_base import Service
 from roles.models import RolePanel, SelectableRoleConfig
 from roles.repository import MongoRolePanelRepository
 from roles.views.panel_view import RoleSelectView
 
 
-class RoleService:
+class RoleService(Service):
     """Manages role panels — creation, updates, persistence, and interaction handling."""
 
     def __init__(

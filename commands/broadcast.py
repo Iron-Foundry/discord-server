@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
+from loguru import logger
 
 from commands.checks import handle_check_failure, is_senior_staff, is_staff
 from commands.help_registry import HelpEntry, HelpGroup, HelpRegistry
@@ -29,6 +30,10 @@ def make_broadcast_context_menu(
             )
             return
 
+        logger.debug(
+            f"Broadcast: forward_to_members invoked by {interaction.user}"
+            f" for message {message.id}"
+        )
         await interaction.response.defer(ephemeral=True, thinking=True)
         result = await service.broadcast_message(message)
 
@@ -71,6 +76,9 @@ class BroadcastGroup(
     async def setrole(
         self, interaction: discord.Interaction, role: discord.Role
     ) -> None:
+        logger.debug(
+            f"Broadcast: setrole invoked by {interaction.user}, role={role.name!r}"
+        )
         await interaction.response.defer(ephemeral=True, thinking=True)
         await self._service.set_role(role.id)
         member_count = sum(1 for m in role.members if not m.bot)

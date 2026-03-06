@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from action_log.service import ActionLogService
     from broadcast.service import BroadcastService
     from core.discord_client import DiscordClient
+    from join_roles.service import JoinRoleService
     from roles.service import RoleService
     from tickets.ticket_service import TicketService
 
@@ -97,6 +98,32 @@ async def load_action_log_service(
     return service
 
 
+async def load_join_role_service(
+    guild: discord.Guild,
+    tree: app_commands.CommandTree,
+    registry: HelpRegistry,
+    mongo_uri: str,
+    db_name: str,
+    client: DiscordClient,
+) -> JoinRoleService:
+    """Initialise the join role service and register its slash commands."""
+    from commands.join_roles import JoinRoleGroup
+    from commands.join_roles import register_help as register_joinrole_help
+    from join_roles.events import register as register_join_role_events
+    from join_roles.repository import MongoJoinRoleRepository
+    from join_roles.service import JoinRoleService
+
+    repo = MongoJoinRoleRepository(mongo_uri=mongo_uri, db_name=db_name)
+    service = JoinRoleService(guild=guild, repo=repo)
+    await service.initialize()
+
+    register_join_role_events(service, client)
+    register_joinrole_help(registry)
+    tree.add_command(JoinRoleGroup(service=service), guild=guild)
+    logger.info("Join role service initialised and commands registered")
+    return service
+
+
 async def load_broadcast_service(
     guild: discord.Guild,
     tree: app_commands.CommandTree,
@@ -140,13 +167,16 @@ async def load_all_services(
     client: DiscordClient,
     mongo_uri: str,
     db_name: str,
-) -> tuple[TicketService, RoleService, ActionLogService, BroadcastService]:
-    """Load all four services in parallel, then register the help command."""
-    ticket, role, action_log, broadcast = await asyncio.gather(
+) -> tuple[
+    TicketService, RoleService, ActionLogService, BroadcastService, JoinRoleService
+]:
+    """Load all services in parallel, then register the help command."""
+    ticket, role, action_log, broadcast, join_role = await asyncio.gather(
         load_ticket_service(guild, tree, registry, mongo_uri, db_name),
         load_role_service(guild, tree, registry, mongo_uri, db_name, client),
         load_action_log_service(guild, tree, registry, mongo_uri, db_name, client),
         load_broadcast_service(guild, tree, registry, mongo_uri, db_name),
+        load_join_role_service(guild, tree, registry, mongo_uri, db_name, client),
     )
     _load_help_command(guild, tree, registry)
-    return ticket, role, action_log, broadcast
+    return ticket, role, action_log, broadcast, join_role

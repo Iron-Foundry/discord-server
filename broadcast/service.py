@@ -7,6 +7,7 @@ from loguru import logger
 
 from broadcast.models import BroadcastConfig
 from broadcast.repository import MongoBroadcastRepository
+from core.service_base import Service
 
 
 @dataclass
@@ -18,7 +19,7 @@ class BroadcastResult:
     skipped: int  # bots and members with DMs disabled
 
 
-class BroadcastService:
+class BroadcastService(Service):
     """Sends DMs to all members of a configured role."""
 
     def __init__(self, guild: discord.Guild, repo: MongoBroadcastRepository) -> None:
@@ -30,6 +31,12 @@ class BroadcastService:
         """Load config from the database."""
         await self._repo.ensure_indexes()
         self._config = await self._repo.get_config(self._guild.id)
+        if self._config is None:
+            logger.debug("BroadcastService: no config found in DB")
+        else:
+            logger.debug(
+                f"BroadcastService: loaded config, role_id={self._config.role_id}"
+            )
         logger.info("BroadcastService initialised")
 
     async def set_role(self, role_id: int) -> None:
@@ -38,11 +45,12 @@ class BroadcastService:
         config.role_id = role_id
         self._config = config
         await self._repo.save_config(config)
+        logger.debug(f"BroadcastService: broadcast role set to {role_id}")
 
     @property
     def role(self) -> discord.Role | None:
         """The configured broadcast role, or None if not set."""
-        if not self._config or not self._config.role_id:
+        if self._config is None or self._config.role_id is None:
             return None
         return self._guild.get_role(self._config.role_id)
 
@@ -50,8 +58,13 @@ class BroadcastService:
         """DM the message to every non-bot member that has the broadcast role."""
         role = self.role
         if role is None:
+            logger.debug("BroadcastService: broadcast_message called but no role set")
             return BroadcastResult(sent=0, failed=0, skipped=0)
 
+        logger.debug(
+            f"BroadcastService: broadcasting to {len(role.members)} member(s)"
+            f" in role {role.name!r}"
+        )
         embed = self._build_dm_embed(message)
         view = _jump_view(message.jump_url)
 
@@ -74,7 +87,12 @@ class BroadcastService:
         return BroadcastResult(sent=sent, failed=failed, skipped=skipped)
 
     def _build_dm_embed(self, message: discord.Message) -> discord.Embed:
-        channel_name = getattr(message.channel, "name", str(message.channel.id))
+        channel = message.channel
+        channel_name = (
+            channel.name
+            if isinstance(channel, discord.abc.GuildChannel)
+            else str(channel.id)
+        )
         embed = discord.Embed(
             description=message.content or "*No text content*",
             color=discord.Color.blurple(),
