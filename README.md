@@ -106,6 +106,44 @@ Manage transcript persistence handlers.
 
 The `mongodb` handler is protected and cannot be disabled.
 
+### /broadcast
+
+Forward a message to all members with the configured broadcast role via DM.
+
+| Command | Description | Access |
+|---|---|---|
+| `/broadcast setrole <role>` | Set the role whose members receive forwarded messages. | Senior Staff |
+| `/broadcast status` | Show the current broadcast role and eligible member count. | Staff |
+| Right-click message → Forward to Members | DM the message to all members with the broadcast role. | Staff |
+
+### /rolepanel
+
+Create and manage self-assign role panels posted as Discord embeds with select menus.
+
+| Command | Description | Access |
+|---|---|---|
+| `/rolepanel list` | List all active role panels. | Staff |
+| `/rolepanel refresh <panel_id>` | Force-sync a panel message with current state. | Staff |
+| `/rolepanel create <channel> <title>` | Post a new role panel to a channel. | Senior Staff |
+| `/rolepanel edit <panel_id>` | Edit a panel's title or description via a modal. | Senior Staff |
+| `/rolepanel addrole <panel_id> <role>` | Add a role to a panel. | Senior Staff |
+| `/rolepanel removerole <panel_id> <role>` | Remove a role from a panel. | Senior Staff |
+| `/rolepanel setemoji <panel_id> <role> <emoji>` | Set the emoji for a role on a panel. | Senior Staff |
+| `/rolepanel setmax <panel_id> <max>` | Set the maximum number of selectable roles (0 = unlimited). | Senior Staff |
+| `/rolepanel delete <panel_id>` | Delete a role panel and its message. | Senior Staff |
+
+All commands that take a `panel_id` support autocomplete.
+
+### /joinrole
+
+Manage roles that are automatically assigned to every new member when they join the server.
+
+| Command | Description | Access |
+|---|---|---|
+| `/joinrole add <role>` | Add a role to the join roles list. | Senior Staff |
+| `/joinrole remove <role>` | Remove a role from the join roles list. | Senior Staff |
+| `/joinrole list` | List all configured join roles. | Staff |
+
 ### /actionlog
 
 Configure and manage the action log service. Log entries are posted as embeds into categorised
@@ -164,7 +202,7 @@ core/
 ```
 
 On startup `setup_hook` (or `on_ready` if the guild was not yet available) calls
-`load_all_services`, which runs the four service initialisers concurrently via
+`load_all_services`, which runs the five service initialisers concurrently via
 `asyncio.gather`, then registers `/help` once all command groups are in place.
 
 ---
