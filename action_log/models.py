@@ -52,4 +52,5 @@ class ActionLogConfig(BaseModel):
     )  # category.value → thread_id
     ignored_channel_ids: list[int] = Field(default_factory=list)
     ignored_thread_ids: list[int] = Field(default_factory=list)
+    ignored_category_ids: list[int] = Field(default_factory=list)
     enabled: bool = True

@@ -20,6 +20,7 @@ class ConfigVars(str, Enum):
     SENIOR_STAFF_ROLE_ID = "SENIOR_STAFF_ROLE_ID"
     OWNER_ROLE_ID = "OWNER_ROLE_ID"
     MENTOR_ROLE_ID = "MENTOR_ROLE_ID"
+    WOM_GROUP_ID = "WOM_GROUP_ID"
 
 
 class ConfigInterface:

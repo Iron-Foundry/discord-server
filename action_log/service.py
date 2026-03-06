@@ -66,12 +66,27 @@ class ActionLogService(Service):
         await self._throttle.enqueue(thread_id, embed)
 
     def is_ignored(self, channel_id: int, *, parent_id: int | None = None) -> bool:
-        """Return True if the channel or parent thread is on the ignore list."""
+        """Return True if the channel, parent thread, or their category is ignored.
+
+        The category check is resolved dynamically from the guild cache so that
+        channels added to an ignored category after bot start are covered.
+        """
         if not self._config:
             return False
         if channel_id in self._config.ignored_channel_ids:
             return True
         if parent_id is not None and parent_id in self._config.ignored_thread_ids:
+            return True
+        if not self._config.ignored_category_ids:
+            return False
+        # For threads resolve via the parent channel; for regular channels use channel_id.
+        resolve_id = parent_id if parent_id is not None else channel_id
+        ch = self._guild.get_channel(resolve_id)
+        if (
+            isinstance(ch, discord.abc.GuildChannel)
+            and ch.category_id is not None
+            and ch.category_id in self._config.ignored_category_ids
+        ):
             return True
         return False
 
@@ -134,6 +149,26 @@ class ActionLogService(Service):
         if channel_id not in target:
             return False
         target.remove(channel_id)
+        await self._repo.save_config(self._config)
+        return True
+
+    async def add_ignore_category(self, category_id: int) -> bool:
+        """Add a category to the ignore list. Returns True if added."""
+        if not self._config:
+            return False
+        if category_id in self._config.ignored_category_ids:
+            return False
+        self._config.ignored_category_ids.append(category_id)
+        await self._repo.save_config(self._config)
+        return True
+
+    async def remove_ignore_category(self, category_id: int) -> bool:
+        """Remove a category from the ignore list. Returns True if removed."""
+        if not self._config:
+            return False
+        if category_id not in self._config.ignored_category_ids:
+            return False
+        self._config.ignored_category_ids.remove(category_id)
         await self._repo.save_config(self._config)
         return True
 

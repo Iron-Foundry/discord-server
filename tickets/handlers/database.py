@@ -26,6 +26,7 @@ class MongoTicketRepository:
         self._tickets = self._db["tickets"]
         self._transcripts = self._db["transcripts"]
         self._counters = self._db["counters"]
+        self._panel_config = self._db["panel_config"]
 
     async def ensure_indexes(self) -> None:
         """Create indexes on startup. Safe to call multiple times."""
@@ -98,6 +99,45 @@ class MongoTicketRepository:
         except PyMongoError as e:
             logger.error(f"Failed to fetch open tickets for guild {guild_id}: {e}")
             return []
+
+    # -------------------------------------------------------------------------
+    # Panel config
+    # -------------------------------------------------------------------------
+
+    async def save_panel_config(
+        self, guild_id: int, channel_id: int, message_id: int
+    ) -> None:
+        """Persist the panel channel and message IDs for a guild."""
+        try:
+            await self._panel_config.replace_one(
+                {"guild_id": guild_id},
+                {
+                    "guild_id": guild_id,
+                    "channel_id": channel_id,
+                    "message_id": message_id,
+                },
+                upsert=True,
+            )
+        except PyMongoError as e:
+            logger.error(f"Failed to save panel config for guild {guild_id}: {e}")
+
+    async def get_panel_config(self, guild_id: int) -> tuple[int, int] | None:
+        """Return (channel_id, message_id) for the guild's panel, or None."""
+        try:
+            doc = await self._panel_config.find_one({"guild_id": guild_id}, {"_id": 0})
+            if doc:
+                return doc["channel_id"], doc["message_id"]
+            return None
+        except PyMongoError as e:
+            logger.error(f"Failed to fetch panel config for guild {guild_id}: {e}")
+            return None
+
+    async def clear_panel_config(self, guild_id: int) -> None:
+        """Remove stale panel config (e.g. message was deleted)."""
+        try:
+            await self._panel_config.delete_one({"guild_id": guild_id})
+        except PyMongoError as e:
+            logger.error(f"Failed to clear panel config for guild {guild_id}: {e}")
 
     async def get_tickets_by_user(
         self,

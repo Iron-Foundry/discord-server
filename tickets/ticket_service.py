@@ -43,9 +43,12 @@ class TicketService(Service):
     - Dispatch to pluggable transcript handlers
     """
 
-    def __init__(self, guild: discord.Guild, repo: MongoTicketRepository) -> None:
+    def __init__(
+        self, guild: discord.Guild, repo: MongoTicketRepository, client: discord.Client
+    ) -> None:
         self.guild = guild
         self.repo = repo
+        self._client = client
         self.type_registry = TicketTypeRegistry()
         # channel_id → Ticket
         self.active_tickets: dict[int, Ticket] = {}
@@ -74,6 +77,7 @@ class TicketService(Service):
         Must be called from on_ready, after the guild cache is fully populated.
         """
         self.try_register_archive_handler()
+        await self._recover_panel()
 
         records = await self.repo.get_open_tickets(self.guild.id)
         now = datetime.now(UTC)
@@ -127,10 +131,45 @@ class TicketService(Service):
         embed = build_panel_embed(self.guild)
         view = TicketPanelView(self)
         self._panel_message = await channel.send(embed=embed, view=view)
+        await self.repo.save_panel_config(
+            self.guild.id, channel.id, self._panel_message.id
+        )
         logger.info(
             f"Panel posted to #{channel.name} "
             f"(category: {channel.category.name if channel.category else 'none'})"
         )
+
+    async def _recover_panel(self) -> None:
+        """Re-attach the panel view to the existing panel message after restart."""
+        config = await self.repo.get_panel_config(self.guild.id)
+        if not config:
+            return
+
+        channel_id, message_id = config
+        channel = self.guild.get_channel(channel_id)
+        if not isinstance(channel, discord.TextChannel):
+            logger.warning(
+                "TicketService: panel channel not found — clearing stale config"
+            )
+            await self.repo.clear_panel_config(self.guild.id)
+            return
+
+        self._panel_channel = channel
+        self._panel_category = channel.category
+
+        try:
+            self._panel_message = await channel.fetch_message(message_id)
+        except discord.NotFound:
+            logger.warning(
+                "TicketService: panel message not found — clearing stale config"
+            )
+            await self.repo.clear_panel_config(self.guild.id)
+            return
+
+        from tickets.views.panel import TicketPanelView
+
+        self._client.add_view(TicketPanelView(self), message_id=message_id)
+        logger.info(f"TicketService: panel view re-attached (message {message_id})")
 
     async def refresh_panel(self) -> None:
         """Rebuild the panel select menu to reflect current enabled types."""

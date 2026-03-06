@@ -77,7 +77,7 @@ class TicketPanelView(discord.ui.View):
 
 def build_panel_embed(guild: discord.Guild) -> discord.Embed:
     embed = discord.Embed(
-        title="🎫 Iron Foundry — Support Tickets",
+        title="🎫 Iron Foundry — Support & Tickets",
         description=(
             "Need help or want to apply for something? Use the menu below to open a ticket.\n\n"
             "A staff member will assist you as soon as possible.\n"

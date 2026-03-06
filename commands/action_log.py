@@ -45,6 +45,11 @@ def register_help(registry: HelpRegistry) -> None:
                     "Senior Staff",
                 ),
                 HelpEntry(
+                    "/actionlog ignore category <category>",
+                    "Ignore all channels in a category from action logging",
+                    "Senior Staff",
+                ),
+                HelpEntry(
                     "/actionlog unignore channel <channel>",
                     "Remove a channel from the ignore list",
                     "Senior Staff",
@@ -52,6 +57,16 @@ def register_help(registry: HelpRegistry) -> None:
                 HelpEntry(
                     "/actionlog unignore thread <thread_id>",
                     "Remove a thread from the ignore list",
+                    "Senior Staff",
+                ),
+                HelpEntry(
+                    "/actionlog unignore category <category>",
+                    "Remove a category from the ignore list",
+                    "Senior Staff",
+                ),
+                HelpEntry(
+                    "/actionlog unignore category <category>",
+                    "Remove a category from the ignore list",
                     "Senior Staff",
                 ),
             ],
@@ -89,6 +104,26 @@ class IgnoreGroup(
         else:
             await interaction.response.send_message(
                 f"{channel.mention} is already ignored.", ephemeral=True
+            )
+
+    @app_commands.command(
+        name="category",
+        description="Ignore all channels in a category from action logging",
+    )
+    @app_commands.describe(category="The category to ignore")
+    @is_senior_staff()
+    async def ignore_category(
+        self, interaction: discord.Interaction, category: discord.CategoryChannel
+    ) -> None:
+        added = await self._service.add_ignore_category(category.id)
+        if added:
+            await interaction.response.send_message(
+                f"Now ignoring all channels in **{category.name}** in action logs.",
+                ephemeral=True,
+            )
+        else:
+            await interaction.response.send_message(
+                f"**{category.name}** is already ignored.", ephemeral=True
             )
 
     @app_commands.command(
@@ -148,6 +183,25 @@ class UnignoreGroup(
         else:
             await interaction.response.send_message(
                 f"{channel.mention} was not in the ignore list.", ephemeral=True
+            )
+
+    @app_commands.command(
+        name="category", description="Remove a category from the ignore list"
+    )
+    @app_commands.describe(category="The category to unignore")
+    @is_senior_staff()
+    async def unignore_category(
+        self, interaction: discord.Interaction, category: discord.CategoryChannel
+    ) -> None:
+        removed = await self._service.remove_ignore_category(category.id)
+        if removed:
+            await interaction.response.send_message(
+                f"**{category.name}** removed from action log ignore list.",
+                ephemeral=True,
+            )
+        else:
+            await interaction.response.send_message(
+                f"**{category.name}** was not in the ignore list.", ephemeral=True
             )
 
     @app_commands.command(
@@ -241,6 +295,12 @@ class ActionLogGroup(
         embed.add_field(name="Forum", value=forum_mention, inline=True)
         embed.add_field(name="Threads", value=str(len(config.thread_ids)), inline=True)
 
+        if config.ignored_category_ids:
+            embed.add_field(
+                name="Ignored Categories",
+                value=" ".join(f"<#{cid}>" for cid in config.ignored_category_ids),
+                inline=False,
+            )
         if config.ignored_channel_ids:
             embed.add_field(
                 name="Ignored Channels",

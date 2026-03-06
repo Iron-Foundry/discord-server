@@ -1,7 +1,7 @@
 # Iron Foundry — Discord Bot
 
 The main Discord bot for the Iron Foundry OSRS clan. Handles the ticket system, role management,
-action logging, and general server automation.
+action logging, community dashboard panels, and general server automation.
 
 ---
 
@@ -57,6 +57,7 @@ All configuration is read from a `.env` file in the project root.
 | `ROLE_COLLECTION` | — | MongoDB collection name for role records. |
 | `USER_COLLECTION` | — | MongoDB collection name for user records. |
 | `DEBUG_MODE` | — | Set to any truthy value to enable debug logging. |
+| `WOM_GROUP_ID` | — | Wise Old Man group ID. Enables the Achievements panel in the docket. If unset, the panel is disabled. |
 
 ---
 
@@ -144,6 +145,37 @@ Manage roles that are automatically assigned to every new member when they join 
 | `/joinrole remove <role>` | Remove a role from the join roles list. | Senior Staff |
 | `/joinrole list` | List all configured join roles. | Staff |
 
+### /docket
+
+Manage a persistent community dashboard channel. Each panel is a live Discord message that
+is edited in-place when its data changes. Run `/docket setup` once to create the channel and
+post all panels; subsequent restarts re-attach to the existing messages automatically.
+
+| Command | Description | Access |
+|---|---|---|
+| `/docket setup <channel>` | Configure the docket channel and post all panels. | Senior Staff |
+| `/docket refresh [panel_type]` | Force-refresh one or all API-backed panels. | Staff |
+| `/docket reset` | Delete and re-post all panels in their original order (confirm dialog). | Senior Staff |
+| `/docket events add <title> <description>` | Add a clan event (optional: host, starts, ends, image_url). | Staff |
+| `/docket events remove <event_id>` | Remove a clan event (autocompletes from live entries). | Staff |
+| `/docket events list` | List all events with their IDs. | Staff |
+| `/docket toc add <channel> <description>` | Add a server guide entry (optional: position). | Staff |
+| `/docket toc remove <entry_id>` | Remove a server guide entry. | Staff |
+| `/docket toc move <entry_id> <position>` | Reorder a server guide entry. | Staff |
+| `/docket toc list` | List all TOC entries with their IDs. | Staff |
+| `/docket donations add <donor> <amount>` | Record a clan donation (optional: note). | Staff |
+| `/docket donations remove <entry_id>` | Remove a donation entry. | Staff |
+| `/docket donations list` | List all donations with their IDs. | Staff |
+
+#### Panels
+
+| Panel | Refresh | Description |
+|---|---|---|
+| Events | Manual | One embed per event — title, description, host, relative timestamps, optional banner. |
+| Server Guide | Manual | Numbered channel list sorted by position. |
+| Achievements | Hourly (WOM API) | Paginated recent clan achievements. Prev/Next buttons persist across restarts. Requires `WOM_GROUP_ID`. |
+| Donations | Manual | Most recent 15 donations sorted by date. |
+
 ### /actionlog
 
 Configure and manage the action log service. Log entries are posted as embeds into categorised
@@ -202,8 +234,12 @@ core/
 ```
 
 On startup `setup_hook` (or `on_ready` if the guild was not yet available) calls
-`load_all_services`, which runs the five service initialisers concurrently via
+`load_all_services`, which runs all service initialisers concurrently via
 `asyncio.gather`, then registers `/help` once all command groups are in place.
+
+Services with a `post_ready` hook (e.g. `DocketService`) are called after `on_ready`
+once the live guild cache is available, allowing them to re-attach to existing channel
+messages and start background refresh loops.
 
 ---
 
