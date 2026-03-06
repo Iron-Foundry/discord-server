@@ -19,7 +19,7 @@ class ContactMentorModal(discord.ui.Modal, title="Contact a Mentor"):
         max_length=100,
     )
     experience = discord.ui.TextInput(
-        label="Your experience with this content or similar content.",
+        label="Experience with this content",
         placeholder="e.g. Never tried it, done it a few times, struggling with a specific mechanic...",
         style=discord.TextStyle.paragraph,
         max_length=500,
