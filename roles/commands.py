@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import discord
 from discord import app_commands
 
-from command_infra.checks import handle_check_failure, is_senior_staff, is_staff
+from command_infra.checks import handle_check_failure, is_staff
 from command_infra.help_registry import HelpEntry, HelpGroup, HelpRegistry
 from roles.models import SelectableRoleConfig
 
@@ -33,42 +33,42 @@ def register_help(registry: HelpRegistry) -> None:
                 HelpEntry(
                     "/rolepanel create <channel> <title>",
                     "Post a new role panel to a channel",
-                    "Senior Staff",
+                    "Staff",
                 ),
                 HelpEntry(
                     "/rolepanel edit <panel_id>",
                     "Edit a panel's title or description via a modal",
-                    "Senior Staff",
+                    "Staff",
                 ),
                 HelpEntry(
                     "/rolepanel addrole <panel_id> <role>",
                     "Add a role to a panel",
-                    "Senior Staff",
+                    "Staff",
                 ),
                 HelpEntry(
                     "/rolepanel removerole <panel_id> <role>",
                     "Remove a role from a panel",
-                    "Senior Staff",
+                    "Staff",
                 ),
                 HelpEntry(
                     "/rolepanel setemoji <panel_id> <role> <emoji>",
                     "Set the emoji for a role on a panel",
-                    "Senior Staff",
+                    "Staff",
                 ),
                 HelpEntry(
                     "/rolepanel setmax <panel_id> <max>",
                     "Set the maximum number of selectable roles",
-                    "Senior Staff",
+                    "Staff",
                 ),
                 HelpEntry(
                     "/rolepanel delete <panel_id>",
                     "Delete a role panel",
-                    "Senior Staff",
+                    "Staff",
                 ),
                 HelpEntry(
                     "/rolepanel refreshall",
                     "Push the new button layout to all live panel messages",
-                    "Senior Staff",
+                    "Staff",
                 ),
             ],
         )
@@ -117,7 +117,7 @@ class RolePanelGroup(
         title="Embed title",
         description="Embed description",
     )
-    @is_senior_staff()
+    @is_staff()
     async def create(
         self,
         interaction: discord.Interaction,
@@ -140,7 +140,7 @@ class RolePanelGroup(
         name="edit", description="Edit a panel's title or description via a modal"
     )
     @app_commands.describe(panel_id="Panel to edit")
-    @is_senior_staff()
+    @is_staff()
     async def edit(
         self,
         interaction: discord.Interaction,
@@ -171,7 +171,7 @@ class RolePanelGroup(
         description="Short description shown in the select menu",
         emoji="Emoji to show next to the label",
     )
-    @is_senior_staff()
+    @is_staff()
     async def addrole(
         self,
         interaction: discord.Interaction,
@@ -218,7 +218,7 @@ class RolePanelGroup(
 
     @app_commands.command(name="removerole", description="Remove a role from a panel")
     @app_commands.describe(panel_id="Panel to update", role="Role to remove")
-    @is_senior_staff()
+    @is_staff()
     async def removerole(
         self,
         interaction: discord.Interaction,
@@ -252,7 +252,7 @@ class RolePanelGroup(
     @app_commands.describe(
         panel_id="Panel to update", role="Role to update", emoji="New emoji"
     )
-    @is_senior_staff()
+    @is_staff()
     async def setemoji(
         self,
         interaction: discord.Interaction,
@@ -286,7 +286,7 @@ class RolePanelGroup(
         panel_id="Panel to update",
         max="Maximum roles selectable at once (1–25); 0 = unlimited",
     )
-    @is_senior_staff()
+    @is_staff()
     async def setmax(
         self,
         interaction: discord.Interaction,
@@ -321,7 +321,7 @@ class RolePanelGroup(
 
     @app_commands.command(name="delete", description="Delete a role panel")
     @app_commands.describe(panel_id="Panel to delete")
-    @is_senior_staff()
+    @is_staff()
     async def delete(
         self,
         interaction: discord.Interaction,
@@ -381,7 +381,7 @@ class RolePanelGroup(
         name="refreshall",
         description="Push the new button layout to all live panel messages",
     )
-    @is_senior_staff()
+    @is_staff()
     async def refreshall(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True, thinking=True)
         count = await self._service.refresh_all_panels()
