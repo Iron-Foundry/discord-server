@@ -4,8 +4,8 @@ import discord
 from discord import app_commands
 from typing import TYPE_CHECKING
 
-from commands.checks import handle_check_failure, is_senior_staff
-from commands.help_registry import HelpEntry, HelpGroup, HelpRegistry
+from command_infra.checks import handle_check_failure, is_senior_staff
+from command_infra.help_registry import HelpEntry, HelpGroup, HelpRegistry
 
 if TYPE_CHECKING:
     from tickets.ticket_service import TicketService

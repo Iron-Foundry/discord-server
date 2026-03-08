@@ -9,7 +9,7 @@ import discord
 from discord import app_commands
 from loguru import logger
 
-from commands.help_registry import HelpRegistry
+from command_infra.help_registry import HelpRegistry
 
 if TYPE_CHECKING:
     from action_log.service import ActionLogService
@@ -30,10 +30,10 @@ async def load_ticket_service(
     client: DiscordClient,
 ) -> TicketService:
     """Initialise the ticket service and register its slash commands."""
-    from commands.handlers import HandlerGroup
-    from commands.handlers import register_help as register_handler_help
-    from commands.tickets import TicketGroup, TicketTypeGroup
-    from commands.tickets import register_help as register_ticket_help
+    from command_infra.handlers import HandlerGroup
+    from command_infra.handlers import register_help as register_handler_help
+    from tickets.commands import TicketGroup, TicketTypeGroup
+    from tickets.commands import register_help as register_ticket_help
     from tickets.handlers.database import MongoTicketRepository
     from tickets.ticket_service import TicketService
     from tickets.types import register_all_types
@@ -61,8 +61,8 @@ async def load_role_service(
     client: DiscordClient,
 ) -> RoleService:
     """Initialise the role panel service and register its slash commands."""
-    from commands.role_panel import RolePanelGroup
-    from commands.role_panel import register_help as register_rolepanel_help
+    from roles.commands import RolePanelGroup
+    from roles.commands import register_help as register_rolepanel_help
     from roles.repository import MongoRolePanelRepository
     from roles.service import RoleService
 
@@ -87,8 +87,8 @@ async def load_action_log_service(
     """Initialise the action log service and register its slash commands."""
     from action_log.repository import MongoActionLogRepository
     from action_log.service import ActionLogService
-    from commands.action_log import ActionLogGroup
-    from commands.action_log import register_help as register_actionlog_help
+    from action_log.commands import ActionLogGroup
+    from action_log.commands import register_help as register_actionlog_help
 
     repo = MongoActionLogRepository(mongo_uri=mongo_uri, db_name=db_name)
     service = ActionLogService(guild=guild, client=client, repo=repo)
@@ -109,8 +109,8 @@ async def load_join_role_service(
     client: DiscordClient,
 ) -> JoinRoleService:
     """Initialise the join role service and register its slash commands."""
-    from commands.join_roles import JoinRoleGroup
-    from commands.join_roles import register_help as register_joinrole_help
+    from join_roles.commands import JoinRoleGroup
+    from join_roles.commands import register_help as register_joinrole_help
     from join_roles.events import register as register_join_role_events
     from join_roles.repository import MongoJoinRoleRepository
     from join_roles.service import JoinRoleService
@@ -136,8 +136,8 @@ async def load_broadcast_service(
     """Initialise the broadcast service and register its slash commands."""
     from broadcast.repository import MongoBroadcastRepository
     from broadcast.service import BroadcastService
-    from commands.broadcast import BroadcastGroup, make_broadcast_context_menu
-    from commands.broadcast import register_help as register_broadcast_help
+    from broadcast.commands import BroadcastGroup, make_broadcast_context_menu
+    from broadcast.commands import register_help as register_broadcast_help
 
     repo = MongoBroadcastRepository(mongo_uri=mongo_uri, db_name=db_name)
     service = BroadcastService(guild=guild, repo=repo)
@@ -159,8 +159,8 @@ async def load_docket_service(
     client: DiscordClient,
 ) -> DocketService:
     """Initialise the docket service and register its slash commands."""
-    from commands.docket import DocketGroup
-    from commands.docket import register_help as register_docket_help
+    from docket.commands import DocketGroup
+    from docket.commands import register_help as register_docket_help
     from core.config import ConfigVars
     from docket.models import PanelType
     from docket.panels.achievements import AchievementsPanel
@@ -209,7 +209,7 @@ def _load_help_command(
     tree: app_commands.CommandTree,
     registry: HelpRegistry,
 ) -> None:
-    from commands.help import make_help_command, register_help
+    from command_infra.help import make_help_command, register_help
 
     register_help(registry)
     tree.add_command(make_help_command(registry), guild=guild)

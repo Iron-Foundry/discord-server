@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 import discord
 from discord import app_commands
 
-from commands.checks import handle_check_failure, is_senior_staff, is_staff
-from commands.help_registry import HelpEntry, HelpGroup, HelpRegistry
+from command_infra.checks import handle_check_failure, is_senior_staff, is_staff
+from command_infra.help_registry import HelpEntry, HelpGroup, HelpRegistry
 from roles.models import SelectableRoleConfig
 
 if TYPE_CHECKING:
