@@ -74,8 +74,8 @@ def register_help(registry: HelpRegistry) -> None:
                     "Staff",
                 ),
                 HelpEntry(
-                    "/ticket transcript <ticket_id>",
-                    "Get the transcript for a ticket (staff: any ticket; others: own only)",
+                    "/ticket transcript <ticket_id> [user]",
+                    "Get the transcript for a ticket. Staff can view any ticket and filter autocomplete by member; others can only view their own.",
                     "Everyone",
                 ),
                 HelpEntry(
@@ -170,15 +170,21 @@ class TicketGroup(
         await handle_check_failure(interaction, error)
 
     # ------------------------------------------------------------------
-    # /ticket transcript <ticket_id>
+    # /ticket transcript <ticket_id> [user]
     # ------------------------------------------------------------------
 
     @app_commands.command(
         name="transcript", description="Get the transcript for a ticket"
     )
-    @app_commands.describe(ticket_id="The ticket ID to fetch the transcript for")
+    @app_commands.describe(
+        ticket_id="The ticket ID to fetch the transcript for",
+        user="Member whose tickets to browse (staff only)",
+    )
     async def transcript(
-        self, interaction: discord.Interaction, ticket_id: int
+        self,
+        interaction: discord.Interaction,
+        ticket_id: int,
+        user: discord.Member | None = None,
     ) -> None:
         from tickets.handlers.archive_channel import build_transcript_file
 
@@ -226,8 +232,9 @@ class TicketGroup(
             return
 
         file = build_transcript_file(saved_transcript)
+        owner_note = f" (opened by <@{record.creator.id}>)" if caller_is_staff else ""
         await interaction.followup.send(
-            f"Transcript for ticket **#{ticket_id:04d}**:",
+            f"Transcript for ticket **#{ticket_id:04d}**{owner_note}:",
             file=file,
             ephemeral=True,
         )
@@ -236,9 +243,30 @@ class TicketGroup(
     async def transcript_autocomplete(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[int]]:
-        tickets = await self._service.get_closed_tickets_by_user(
-            interaction.user.id, limit=25
+        staff_role_id_str = os.getenv("STAFF_ROLE_ID")
+        caller_is_staff = (
+            isinstance(interaction.user, discord.Member)
+            and staff_role_id_str is not None
+            and any(r.id == int(staff_role_id_str) for r in interaction.user.roles)
         )
+
+        target_user: discord.Member | None = getattr(
+            interaction.namespace, "user", None
+        )
+
+        if caller_is_staff and target_user is not None:
+            tickets = await self._service.get_closed_tickets_by_user(
+                target_user.id, limit=25
+            )
+        elif caller_is_staff:
+            tickets = await self._service.repo.get_recent_closed_tickets(
+                self._service.guild.id, limit=25
+            )
+        else:
+            tickets = await self._service.get_closed_tickets_by_user(
+                interaction.user.id, limit=25
+            )
+
         return [
             app_commands.Choice(
                 name=f"#{t.ticket_id:04d} — {t.ticket_type.replace('_', ' ').title()}",

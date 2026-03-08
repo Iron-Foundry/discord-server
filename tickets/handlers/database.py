@@ -186,6 +186,40 @@ class MongoTicketRepository:
         except PyMongoError as e:
             logger.error(f"Failed to set join text for guild {guild_id}: {e}")
 
+    async def get_recent_closed_tickets(
+        self, guild_id: int, limit: int = 25
+    ) -> list[TicketRecord]:
+        """Return the most recently closed/archived tickets across all users for a guild."""
+        try:
+            cursor = (
+                self._tickets.find(
+                    {
+                        "guild_id": guild_id,
+                        "status": {
+                            "$in": [
+                                TicketStatus.CLOSED.value,
+                                TicketStatus.ARCHIVED.value,
+                            ]
+                        },
+                    },
+                    {"_id": 0},
+                )
+                .sort("ticket_id", DESCENDING)
+                .limit(limit)
+            )
+            records: list[TicketRecord] = []
+            async for doc in cursor:
+                try:
+                    records.append(TicketRecord.model_validate(doc))
+                except Exception as e:
+                    logger.warning(f"Skipping malformed ticket document: {e}")
+            return records
+        except PyMongoError as e:
+            logger.error(
+                f"Failed to fetch recent closed tickets for guild {guild_id}: {e}"
+            )
+            return []
+
     async def get_tickets_by_user(
         self,
         guild_id: int,
