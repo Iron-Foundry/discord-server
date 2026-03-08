@@ -859,7 +859,11 @@ class TicketService(Service):
         overwrites = new_type.get_channel_permissions(
             self.guild, cast(discord.Member, creator_obj)
         )
-        await ticket.channel.edit(overwrites=overwrites)
+        new_channel_name = f"{new_type.channel_prefix}-{ticket_id:04d}"
+        await ticket.channel.edit(name=new_channel_name, overwrites=overwrites)
+
+        if ticket.transcript:
+            ticket.transcript.ticket_type = new_type_id
 
         embed = discord.Embed(
             description=(
