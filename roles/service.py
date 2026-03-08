@@ -9,7 +9,7 @@ from loguru import logger
 from core.service_base import Service
 from roles.models import RolePanel, SelectableRoleConfig
 from roles.repository import MongoRolePanelRepository
-from roles.views.panel_view import RoleSelectView
+from roles.views.panel_view import EphemeralRoleSelectView, RoleSelectView
 
 
 class RoleService(Service):
@@ -249,6 +249,29 @@ class RoleService(Service):
                 ephemeral=True,
             )
 
+    async def handle_manage_open(
+        self,
+        interaction: discord.Interaction,
+        panel_id: str,
+    ) -> None:
+        """Send an ephemeral role select pre-populated with the member's current roles."""
+        panel = self._panels.get(panel_id)
+        if not panel:
+            await interaction.followup.send("Panel not found.", ephemeral=True)
+            return
+
+        member = interaction.user
+        if not isinstance(member, discord.Member):
+            await interaction.followup.send(
+                "This can only be used in a server.", ephemeral=True
+            )
+            return
+
+        panel_role_ids = {r.role_id for r in panel.roles}
+        member_current_role_ids = {r.id for r in member.roles} & panel_role_ids
+        view = EphemeralRoleSelectView(self, panel, member_current_role_ids)
+        await interaction.followup.send("Select your roles:", view=view, ephemeral=True)
+
     async def handle_clear_all(
         self,
         interaction: discord.Interaction,
@@ -292,6 +315,12 @@ class RoleService(Service):
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    async def refresh_all_panels(self) -> int:
+        """Refresh all panels. Returns count of panels refreshed."""
+        for panel in self._panels.values():
+            await self._refresh_panel(panel)
+        return len(self._panels)
 
     async def _refresh_panel(self, panel: RolePanel) -> None:
         """Edit the panel message to reflect current state."""

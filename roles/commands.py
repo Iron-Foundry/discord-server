@@ -65,6 +65,11 @@ def register_help(registry: HelpRegistry) -> None:
                     "Delete a role panel",
                     "Senior Staff",
                 ),
+                HelpEntry(
+                    "/rolepanel refreshall",
+                    "Push the new button layout to all live panel messages",
+                    "Senior Staff",
+                ),
             ],
         )
     )
@@ -367,6 +372,20 @@ class RolePanelGroup(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
         return await self._panel_autocomplete(interaction, current)
+
+    # ------------------------------------------------------------------
+    # /rolepanel refreshall
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="refreshall",
+        description="Push the new button layout to all live panel messages",
+    )
+    @is_senior_staff()
+    async def refreshall(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        count = await self._service.refresh_all_panels()
+        await interaction.followup.send(f"Refreshed {count} panel(s).", ephemeral=True)
 
     # ------------------------------------------------------------------
     # /rolepanel list
