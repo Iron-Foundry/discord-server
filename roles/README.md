@@ -11,7 +11,7 @@ Multiple panels can be configured, each covering a different role category
 | File | Purpose |
 |---|---|
 | `service.py` | `RolesService` — creates and maintains panel messages |
-| `commands.py` | `/roles` slash commands — add/remove panels and configure role options |
+| `commands.py` | `/rolepanel` slash commands — create, edit, and manage role panels |
 | `views/` | Discord UI components — `Select` menus and their interaction callbacks |
 | `models.py` | Pydantic models for panel config and role entries |
 | `repository.py` | MongoDB persistence for panel configuration and message IDs |

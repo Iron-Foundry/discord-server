@@ -212,17 +212,22 @@ class TicketService(Service):
         interaction: discord.Interaction,
         type_id: str,
         metadata: dict[str, Any],
+        *,
+        creator_override: discord.Member | None = None,
     ) -> Ticket | None:
-        """
-        Create a new ticket channel and persist the record.
-        Called from the panel select callback and from /ticket open.
+        """Create a new ticket channel and persist the record.
+
+        Called from the panel select callback, ``/ticket open``, and the DM
+        ticket menu.  Pass ``creator_override`` when the interaction user is
+        a :class:`discord.User` rather than a :class:`discord.Member` (e.g.
+        when the interaction originates from a DM).
         """
         ticket_type = self.type_registry.get(type_id)
         if not ticket_type or not ticket_type.enabled:
             logger.error(f"create_ticket: unknown or disabled type '{type_id}'")
             return None
 
-        creator = interaction.user
+        creator = creator_override or interaction.user
         if not isinstance(creator, discord.Member):
             return None
 

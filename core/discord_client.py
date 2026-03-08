@@ -16,6 +16,7 @@ from core.service_loader import load_all_services
 if TYPE_CHECKING:
     from action_log.service import ActionLogService
     from broadcast.service import BroadcastService
+    from dm_tickets.service import DMTicketService
     from docket.service import DocketService
     from join_roles.service import JoinRoleService
     from roles.service import RoleService
@@ -43,6 +44,7 @@ class DiscordClient(discord.Client):
         self.broadcast_service: BroadcastService | None = None
         self.join_role_service: JoinRoleService | None = None
         self.docket_service: DocketService | None = None
+        self.dm_ticket_service: DMTicketService | None = None
 
     async def _resolve_guild(self) -> None:
         """Look up the configured guild and bind it to the command handler."""
@@ -81,6 +83,7 @@ class DiscordClient(discord.Client):
             self.broadcast_service,
             self.join_role_service,
             self.docket_service,
+            self.dm_ticket_service,
         ) = services
         self.service_handler.register(*services)
         self._services_loaded = True
@@ -115,10 +118,14 @@ class DiscordClient(discord.Client):
         logger.info(await self.command_handler.sync())
 
     async def on_message(self, message: discord.Message) -> None:
-        if message.author.bot or not message.guild:
+        if message.author.bot:
             return
-        if self.ticket_service:
-            await self.ticket_service.handle_message(message)
+        if message.guild:
+            if self.ticket_service:
+                await self.ticket_service.handle_message(message)
+        else:
+            if self.dm_ticket_service:
+                await self.dm_ticket_service.handle_dm(message)
 
     def add_listener(
         self,

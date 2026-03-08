@@ -81,9 +81,12 @@ Ticket lifecycle and management.
 | `/ticket stats [user] [period]` | View handler statistics for a staff member (type breakdown, avg response/resolution time). Defaults to the invoking user and all-time. | Staff |
 | `/ticket leaderboard [period]` | Show top handlers ranked by tickets closed. Excludes bot auto-closures. | Staff |
 | `/ticket system [period]` | View overall system stats (volume, avg wait/response/resolution time). | Staff |
+| `/ticket transcript <ticket_id>` | Retrieve the transcript for a ticket. Staff can view any ticket; members can only view their own. | Everyone |
 | `/ticket panel <channel>` | Post the ticket creation panel to a channel. | Senior Staff |
+| `/ticket setrankimage <type> <attachment>` | Upload the rank requirements or rank upgrades image shown by the Rank Details button. | Senior Staff |
+| `/ticket setrankjointext` | Edit the welcome text posted into join tickets when Rank Details is clicked. | Senior Staff |
 
-The `open` and `reopen` commands support autocomplete.
+The `open`, `reopen`, and `transcript` commands support autocomplete.
 
 ### /tickettype
 
@@ -131,6 +134,7 @@ Create and manage self-assign role panels posted as Discord embeds with select m
 | `/rolepanel removerole <panel_id> <role>` | Remove a role from a panel. | Senior Staff |
 | `/rolepanel setemoji <panel_id> <role> <emoji>` | Set the emoji for a role on a panel. | Senior Staff |
 | `/rolepanel setmax <panel_id> <max>` | Set the maximum number of selectable roles (0 = unlimited). | Senior Staff |
+| `/rolepanel refreshall` | Push the current button layout to all live panel messages. | Senior Staff |
 | `/rolepanel delete <panel_id>` | Delete a role panel and its message. | Senior Staff |
 
 All commands that take a `panel_id` support autocomplete.
@@ -188,20 +192,24 @@ threads inside a Discord ForumChannel.
 | `/actionlog toggle` | Enable or disable the action log. | Senior Staff |
 | `/actionlog ignore channel <channel>` | Exclude a channel from action log entries. | Senior Staff |
 | `/actionlog ignore thread <thread_id>` | Exclude a thread (by ID) from action log entries. | Senior Staff |
+| `/actionlog ignore category <category>` | Exclude all channels in a category from action log entries. | Senior Staff |
 | `/actionlog unignore channel <channel>` | Remove a channel from the ignore list. | Senior Staff |
 | `/actionlog unignore thread <thread_id>` | Remove a thread from the ignore list. | Senior Staff |
+| `/actionlog unignore category <category>` | Remove a category from the ignore list. | Senior Staff |
 
 #### Log categories
 
-| Thread | Colour | Events (planned) |
-|---|---|---|
-| Messages | Gold | Edit, delete, bulk-delete |
-| Members | Green | Join, leave, nick/role/timeout updates |
-| Roles | Blue | Create, delete, update |
-| Channels | Purple | Create, delete, update, pins |
-| Guild | Teal | Guild update, emoji, stickers, integrations |
-| Moderation | Red | Ban, unban, audit entries |
-| Scheduled Events | Orange | Create, delete, update |
+| Thread | Events |
+|---|---|
+| Messages | Edit, delete, bulk-delete |
+| Members | Join, leave, nick/role/timeout updates |
+| Roles | Create, delete, update |
+| Channels | Create, delete, update, pins |
+| Threads | Create, delete, update, archive |
+| Invites | Create, delete |
+| Guild | Guild update, emoji, stickers, integrations |
+| Moderation | Ban, unban, audit entries |
+| Scheduled Events | Create, delete, update |
 
 All writes go through a rate-limited queue (1 message/second) to stay safely within Discord limits.
 
@@ -217,9 +225,20 @@ All writes go through a rate-limited queue (1 message/second) to stay safely wit
 | `apply_staff` | Apply to Staff | Staff applications. Prompts for RSN, experience, region, and motivation. |
 | `apply_mentor` | Apply to Mentor | Mentor applications. Prompts for RSN, experience, and motivation. |
 | `contact_mentor` | Contact a Mentor | PVM help requests. Prompts for RSN, content, and experience level. |
-| `sensitive` | Sensitive | Sensitive matters visible only to Senior Staff and Owners. |
+| `sensitive` | Sensitive | Sensitive matters visible only to Senior Staff and Owners. No transcript is stored. |
 
 Tickets close automatically after 24 hours of inactivity unless the timeout has been frozen.
+
+### Ticket Tools Panel
+
+When staff run `/ticket tools`, a persistent panel is posted with the following buttons:
+
+| Button | Ticket Types | Description |
+|---|---|---|
+| Close Ticket | All | Opens a modal to close with a reason (DM'd to creator) and an internal staff note. |
+| Freeze Timeout | All | Prevents the 24-hour inactivity timer from firing. Toggles to Unfreeze. |
+| Rank Details | `join_cc`, `rankup` | Posts the configured rank requirements and upgrades images. In join tickets, also posts the welcome text. |
+| Change Type | All | Opens an ephemeral select menu to reclassify the ticket. Updates channel name, permissions, and transcript. |
 
 ---
 
@@ -231,15 +250,17 @@ core/
   service_loader.py   — pure async functions that initialise each service in parallel
   command_handler.py  — CommandHandler singleton, owns the slash-command tree
   config.py           — ConfigInterface, env-var access
+  service_base.py     — Service abstract base class
+  service_handler.py  — ServiceHandler lifecycle manager
 ```
 
-On startup `setup_hook` (or `on_ready` if the guild was not yet available) calls
-`load_all_services`, which runs all service initialisers concurrently via
-`asyncio.gather`, then registers `/help` once all command groups are in place.
+On startup `setup_hook` resolves the guild and calls `load_all_services`, which runs all
+service initialisers concurrently via `asyncio.gather`, then registers `/help` once all
+command groups are in place.
 
-Services with a `post_ready` hook (e.g. `DocketService`) are called after `on_ready`
-once the live guild cache is available, allowing them to re-attach to existing channel
-messages and start background refresh loops.
+Services with a `post_ready` hook (e.g. `TicketService`, `DocketService`) are called after
+`on_ready` once the live guild cache is available, allowing them to re-attach to existing
+channel messages and start background refresh loops.
 
 ---
 

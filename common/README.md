@@ -8,4 +8,4 @@ Shared constants and enums used across multiple services.
 |---|---|
 | `ranks.py` | `Rank` enum — all clan rank tiers (Recruit → Owner) |
 | `regions.py` | `Region` enum — supported geographic regions for member profiles |
-| `ticket_types.py` | `TicketType` enum — the seven supported ticket categories |
+| `ticket_types.py` | `TicketTypeId` enum — the seven supported ticket categories |

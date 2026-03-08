@@ -13,5 +13,5 @@ all services extend.
 | `config.py` | `ConfigInterface` — typed access to environment variables |
 | `service_loader.py` | Discovers and registers every service and its slash commands |
 | `command_handler.py` | Singleton `CommandHandler` — owns the `app_commands.CommandTree` |
-| `service_base.py` | `ServiceBase` — abstract base class for all feature services |
+| `service_base.py` | `Service` — abstract base class for all feature services |
 | `service_handler.py` | `ServiceHandler` — lifecycle management for registered services |

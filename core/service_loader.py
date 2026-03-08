@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from action_log.service import ActionLogService
     from broadcast.service import BroadcastService
     from core.discord_client import DiscordClient
+    from dm_tickets.service import DMTicketService
     from docket.service import DocketService
     from join_roles.service import JoinRoleService
     from roles.service import RoleService
@@ -204,6 +205,19 @@ async def load_docket_service(
     return service
 
 
+async def load_dm_ticket_service(
+    guild: discord.Guild,
+    ticket_service: TicketService,
+) -> DMTicketService:
+    """Initialise the DM ticket service (depends on TicketService)."""
+    from dm_tickets.service import DMTicketService
+
+    service = DMTicketService(guild=guild, ticket_service=ticket_service)
+    await service.initialize()
+    logger.info("DM ticket service initialised")
+    return service
+
+
 def _load_help_command(
     guild: discord.Guild,
     tree: app_commands.CommandTree,
@@ -230,8 +244,13 @@ async def load_all_services(
     BroadcastService,
     JoinRoleService,
     DocketService,
+    DMTicketService,
 ]:
-    """Load all services in parallel, then register the help command."""
+    """Load all services, then register the help command.
+
+    Independent services are loaded in parallel.  :class:`DMTicketService`
+    is loaded after :class:`TicketService` because it depends on it.
+    """
     ticket, role, action_log, broadcast, join_role, docket = await asyncio.gather(
         load_ticket_service(guild, tree, registry, mongo_uri, db_name, client),
         load_role_service(guild, tree, registry, mongo_uri, db_name, client),
@@ -240,5 +259,6 @@ async def load_all_services(
         load_join_role_service(guild, tree, registry, mongo_uri, db_name, client),
         load_docket_service(guild, tree, registry, mongo_uri, db_name, client),
     )
+    dm_ticket = await load_dm_ticket_service(guild, ticket)
     _load_help_command(guild, tree, registry)
-    return ticket, role, action_log, broadcast, join_role, docket
+    return ticket, role, action_log, broadcast, join_role, docket, dm_ticket
