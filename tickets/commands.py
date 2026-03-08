@@ -10,7 +10,7 @@ from loguru import logger
 
 from command_infra.checks import handle_check_failure, is_senior_staff, is_staff
 from command_infra.help_registry import HelpEntry, HelpGroup, HelpRegistry
-from tickets.models.ticket import TicketStatus
+from tickets.models.ticket import TicketRecord, TicketStatus
 from tickets.views.ticket_tools import CloseReasonModal
 
 if TYPE_CHECKING:
@@ -267,11 +267,18 @@ class TicketGroup(
                 interaction.user.id, limit=25
             )
 
+        def _choice_name(t: TicketRecord) -> str:
+            name = f"#{t.ticket_id:04d} — {t.ticket_type.replace('_', ' ').title()}"
+            if caller_is_staff:
+                name += f" ({t.creator.display_name})"
+                if t.staff_note:
+                    note = t.staff_note
+                    note = note[:25] + "..." if len(note) > 25 else note
+                    name += f" — {note}"
+            return name
+
         return [
-            app_commands.Choice(
-                name=f"#{t.ticket_id:04d} — {t.ticket_type.replace('_', ' ').title()}",
-                value=t.ticket_id,
-            )
+            app_commands.Choice(name=_choice_name(t), value=t.ticket_id)
             for t in tickets
             if not current or current in str(t.ticket_id)
         ]
