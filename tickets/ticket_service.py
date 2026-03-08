@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from datetime import datetime, UTC
 from typing import Any, cast
 
@@ -28,6 +29,23 @@ from tickets.models.transcript import (
 from core.service_base import Service
 
 TICKET_TIMEOUT_SECONDS = 86_400  # 24 hours
+
+
+@dataclass
+class StoredImage:
+    """A binary image stored in MongoDB."""
+
+    filename: str
+    data: bytes
+
+
+@dataclass
+class RankDetailsConfig:
+    """Rank details assets configured by staff."""
+
+    rank_reqs: StoredImage | None = None
+    rank_upgrades: StoredImage | None = None
+    join_text: str | None = None
 
 
 class TicketService(Service):
@@ -62,6 +80,7 @@ class TicketService(Service):
         self._panel_message: discord.Message | None = None
         self._panel_category: discord.CategoryChannel | None = None
         self._closed_tickets: dict[int, Ticket] = {}
+        self._rank_details_config: RankDetailsConfig | None = None
 
     # -------------------------------------------------------------------------
     # Startup — restart recovery
@@ -593,7 +612,7 @@ class TicketService(Service):
             return
         from tickets.views.ticket_tools import TicketToolsView, build_tools_embed
 
-        view = TicketToolsView(self, ticket.ticket_id)
+        view = TicketToolsView(self, ticket.ticket_id, ticket.record.ticket_type)
         embed = build_tools_embed()
         await interaction.response.send_message(embed=embed, view=view)
 
@@ -759,11 +778,113 @@ class TicketService(Service):
     def get_ticket_by_channel(self, channel_id: int) -> Ticket | None:
         return self.active_tickets.get(channel_id)
 
+    def get_ticket_by_id(self, ticket_id: int) -> Ticket | None:
+        """Return the active ticket with the given ticket_id, or None."""
+        return self._get_by_ticket_id(ticket_id)
+
     def _get_by_ticket_id(self, ticket_id: int) -> Ticket | None:
         for ticket in self.active_tickets.values():
             if ticket.ticket_id == ticket_id:
                 return ticket
         return None
+
+    # -------------------------------------------------------------------------
+    # Rank details config
+    # -------------------------------------------------------------------------
+
+    async def get_rank_details_config(self) -> RankDetailsConfig:
+        """Return the lazily-cached rank details config for this guild."""
+        if self._rank_details_config is None:
+            doc = await self.repo.get_rank_details_config(self.guild.id) or {}
+            self._rank_details_config = RankDetailsConfig(
+                rank_reqs=(
+                    StoredImage(doc["rank_reqs_filename"], bytes(doc["rank_reqs_data"]))
+                    if "rank_reqs_data" in doc
+                    else None
+                ),
+                rank_upgrades=(
+                    StoredImage(
+                        doc["rank_upgrades_filename"], bytes(doc["rank_upgrades_data"])
+                    )
+                    if "rank_upgrades_data" in doc
+                    else None
+                ),
+                join_text=doc.get("join_text"),
+            )
+        return self._rank_details_config
+
+    async def set_rank_details_image(
+        self, key: str, attachment: discord.Attachment
+    ) -> None:
+        """Download and persist a rank details image, then bust the cache."""
+        data = await attachment.read()
+        await self.repo.set_rank_details_image(
+            self.guild.id, key, attachment.filename, data
+        )
+        self._rank_details_config = None
+
+    async def set_rank_details_join_text(self, text: str) -> None:
+        """Persist the join ticket welcome text, then bust the cache."""
+        await self.repo.set_rank_details_join_text(self.guild.id, text)
+        self._rank_details_config = None
+
+    # -------------------------------------------------------------------------
+    # Change ticket type
+    # -------------------------------------------------------------------------
+
+    async def change_ticket_type(
+        self, ticket_id: int, new_type_id: str, changer: discord.Member
+    ) -> bool:
+        """Reclassify a ticket to a different type and update channel permissions."""
+        ticket = self._get_by_ticket_id(ticket_id)
+        if not ticket:
+            return False
+
+        new_type = self.type_registry.get(new_type_id)
+        if (
+            not new_type
+            or not new_type.enabled
+            or new_type_id == ticket.record.ticket_type
+        ):
+            return False
+
+        old_type_name = ticket.ticket_type.display_name
+        ticket.record.ticket_type = new_type_id
+        ticket.ticket_type = new_type
+        await self.repo.update_ticket(ticket_id, ticket_type=new_type_id)
+
+        creator_obj: discord.Member | discord.Object = self.guild.get_member(
+            ticket.record.creator.id
+        ) or discord.Object(id=ticket.record.creator.id)
+        overwrites = new_type.get_channel_permissions(
+            self.guild, cast(discord.Member, creator_obj)
+        )
+        await ticket.channel.edit(overwrites=overwrites)
+
+        embed = discord.Embed(
+            description=(
+                f"Ticket type changed from **{old_type_name}** to "
+                f"**{new_type.display_name}** by {changer.mention}."
+            ),
+            color=new_type.color,
+        )
+        await ticket.channel.send(embed=embed)
+
+        if ticket.transcript:
+            ticket.transcript.staff_actions.append(
+                StaffAction(
+                    actor_id=changer.id,
+                    actor_name=changer.display_name,
+                    action=StaffActionType.CHANGED_TYPE,
+                    note=f"{old_type_name} -> {new_type.display_name}",
+                )
+            )
+
+        logger.info(
+            f"Ticket #{ticket_id} type changed: {old_type_name} -> "
+            f"{new_type.display_name} by {changer}"
+        )
+        return True
 
     def try_register_archive_handler(self) -> None:
         """Register the archive channel handler if the channel is now resolvable.

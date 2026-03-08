@@ -58,6 +58,7 @@ class StaffActionType(str, Enum):
     FROZE = "froze"
     UNFROZE = "unfroze"
     TIMED_OUT = "timed_out"
+    CHANGED_TYPE = "changed_type"
 
 
 class StaffAction(BaseModel):

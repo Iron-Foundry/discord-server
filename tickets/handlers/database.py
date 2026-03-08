@@ -27,6 +27,7 @@ class MongoTicketRepository:
         self._transcripts = self._db["transcripts"]
         self._counters = self._db["counters"]
         self._panel_config = self._db["panel_config"]
+        self._ticket_config = self._db["ticket_config"]
 
     async def ensure_indexes(self) -> None:
         """Create indexes on startup. Safe to call multiple times."""
@@ -138,6 +139,52 @@ class MongoTicketRepository:
             await self._panel_config.delete_one({"guild_id": guild_id})
         except PyMongoError as e:
             logger.error(f"Failed to clear panel config for guild {guild_id}: {e}")
+
+    # -------------------------------------------------------------------------
+    # Rank details config
+    # -------------------------------------------------------------------------
+
+    async def get_rank_details_config(self, guild_id: int) -> dict | None:
+        """Return the rank details config document for a guild, or None."""
+        try:
+            return await self._ticket_config.find_one(
+                {"guild_id": guild_id}, {"_id": 0}
+            )
+        except PyMongoError as e:
+            logger.error(
+                f"Failed to fetch rank details config for guild {guild_id}: {e}"
+            )
+            return None
+
+    async def set_rank_details_image(
+        self, guild_id: int, key: str, filename: str, data: bytes
+    ) -> None:
+        """Upsert a rank image (rank_reqs or rank_upgrades) for a guild."""
+        try:
+            await self._ticket_config.update_one(
+                {"guild_id": guild_id},
+                {
+                    "$set": {
+                        "guild_id": guild_id,
+                        f"{key}_filename": filename,
+                        f"{key}_data": data,
+                    }
+                },
+                upsert=True,
+            )
+        except PyMongoError as e:
+            logger.error(f"Failed to set rank image '{key}' for guild {guild_id}: {e}")
+
+    async def set_rank_details_join_text(self, guild_id: int, text: str) -> None:
+        """Upsert the join ticket welcome text for a guild."""
+        try:
+            await self._ticket_config.update_one(
+                {"guild_id": guild_id},
+                {"$set": {"guild_id": guild_id, "join_text": text}},
+                upsert=True,
+            )
+        except PyMongoError as e:
+            logger.error(f"Failed to set join text for guild {guild_id}: {e}")
 
     async def get_tickets_by_user(
         self,

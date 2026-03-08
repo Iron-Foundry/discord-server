@@ -84,6 +84,16 @@ def register_help(registry: HelpRegistry) -> None:
                     "Senior Staff",
                 ),
                 HelpEntry(
+                    "/ticket setrankimage <type> <attachment>",
+                    "Upload rank_reqs or rank_upgrades image",
+                    "Senior Staff",
+                ),
+                HelpEntry(
+                    "/ticket setrankjointext",
+                    "Edit the join ticket welcome text",
+                    "Senior Staff",
+                ),
+                HelpEntry(
                     "/ticket stats [user] [period]",
                     "View handler statistics for a staff member",
                     "Staff",
@@ -124,6 +134,27 @@ def register_help(registry: HelpRegistry) -> None:
             ],
         )
     )
+
+
+class RankJoinTextModal(discord.ui.Modal, title="Set Join Ticket Text"):
+    """Modal for editing the join ticket welcome text."""
+
+    text = discord.ui.TextInput(
+        label="Join Ticket Message",
+        style=discord.TextStyle.paragraph,
+        max_length=2000,
+    )
+
+    def __init__(self, service: TicketService) -> None:
+        super().__init__()
+        self._service = service
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        await self._service.set_rank_details_join_text(self.text.value)
+        await interaction.followup.send(
+            "Join ticket welcome text updated.", ephemeral=True
+        )
 
 
 class TicketGroup(
@@ -637,6 +668,50 @@ class TicketGroup(
             await interaction.followup.send(
                 "An error occurred while fetching system stats.", ephemeral=True
             )
+
+    # ------------------------------------------------------------------
+    # /ticket setrankimage <image_type> <attachment>
+    # ------------------------------------------------------------------
+
+    _IMAGE_TYPE_CHOICES = [
+        app_commands.Choice(name="Rank Requirements", value="rank_reqs"),
+        app_commands.Choice(name="Rank Upgrades", value="rank_upgrades"),
+    ]
+
+    @app_commands.command(
+        name="setrankimage",
+        description="Upload a rank requirements or upgrades image",
+    )
+    @app_commands.describe(
+        image_type="Which image to set",
+        attachment="The image file to upload",
+    )
+    @app_commands.choices(image_type=_IMAGE_TYPE_CHOICES)
+    @is_senior_staff()
+    async def setrankimage(
+        self,
+        interaction: discord.Interaction,
+        image_type: str,
+        attachment: discord.Attachment,
+    ) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        await self._service.set_rank_details_image(image_type, attachment)
+        label = "Rank Requirements" if image_type == "rank_reqs" else "Rank Upgrades"
+        await interaction.followup.send(
+            f"{label} image updated successfully.", ephemeral=True
+        )
+
+    # ------------------------------------------------------------------
+    # /ticket setrankjointext
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="setrankjointext",
+        description="Edit the join ticket welcome text",
+    )
+    @is_senior_staff()
+    async def setrankjointext(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_modal(RankJoinTextModal(self._service))
 
 
 class TicketTypeGroup(
