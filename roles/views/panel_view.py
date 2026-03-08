@@ -18,7 +18,6 @@ class ManageRolesButton(discord.ui.Button):
             custom_id=f"role_panel_manage:{panel.panel_id}",
             label="Manage My Roles",
             style=discord.ButtonStyle.primary,
-            emoji="\U0001f3ad",
             row=0,
         )
 
@@ -37,7 +36,6 @@ class ClearAllButton(discord.ui.Button):
             custom_id=f"role_panel_clear:{panel.panel_id}",
             label="Clear All Roles",
             style=discord.ButtonStyle.danger,
-            emoji="\U0001f5d1\ufe0f",
             row=0,
         )
 
