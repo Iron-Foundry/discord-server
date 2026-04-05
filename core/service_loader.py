@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from join_roles.service import JoinRoleService
     from roles.service import RoleService
     from tickets.ticket_service import TicketService
+    from user_keys.service import UserKeyService
 
 
 async def load_ticket_service(
@@ -205,6 +206,26 @@ async def load_docket_service(
     return service
 
 
+async def load_user_key_service(
+    guild: discord.Guild,
+    tree: app_commands.CommandTree,
+    mongo_uri: str,
+    db_name: str,
+) -> "UserKeyService":
+    """Initialise the user key service and register the /userkey command."""
+    from user_keys.commands import make_userkey_command
+    from user_keys.repository import MongoUserKeyRepository
+    from user_keys.service import UserKeyService
+
+    repo = MongoUserKeyRepository(mongo_uri=mongo_uri, db_name=db_name)
+    service = UserKeyService(guild=guild, repo=repo)
+    await service.initialize()
+
+    tree.add_command(make_userkey_command(service), guild=guild)
+    logger.info("User key service initialised and /userkey command registered")
+    return service
+
+
 async def load_dm_ticket_service(
     guild: discord.Guild,
     ticket_service: TicketService,
@@ -245,20 +266,26 @@ async def load_all_services(
     JoinRoleService,
     DocketService,
     DMTicketService,
+    "UserKeyService",
 ]:
     """Load all services, then register the help command.
 
     Independent services are loaded in parallel.  :class:`DMTicketService`
     is loaded after :class:`TicketService` because it depends on it.
     """
-    ticket, role, action_log, broadcast, join_role, docket = await asyncio.gather(
-        load_ticket_service(guild, tree, registry, mongo_uri, db_name, client),
-        load_role_service(guild, tree, registry, mongo_uri, db_name, client),
-        load_action_log_service(guild, tree, registry, mongo_uri, db_name, client),
-        load_broadcast_service(guild, tree, registry, mongo_uri, db_name),
-        load_join_role_service(guild, tree, registry, mongo_uri, db_name, client),
-        load_docket_service(guild, tree, registry, mongo_uri, db_name, client),
+    ticket, role, action_log, broadcast, join_role, docket, user_keys = (
+        await asyncio.gather(
+            load_ticket_service(guild, tree, registry, mongo_uri, db_name, client),
+            load_role_service(guild, tree, registry, mongo_uri, db_name, client),
+            load_action_log_service(
+                guild, tree, registry, mongo_uri, db_name, client
+            ),
+            load_broadcast_service(guild, tree, registry, mongo_uri, db_name),
+            load_join_role_service(guild, tree, registry, mongo_uri, db_name, client),
+            load_docket_service(guild, tree, registry, mongo_uri, db_name, client),
+            load_user_key_service(guild, tree, mongo_uri, db_name),
+        )
     )
     dm_ticket = await load_dm_ticket_service(guild, ticket)
     _load_help_command(guild, tree, registry)
-    return ticket, role, action_log, broadcast, join_role, docket, dm_ticket
+    return ticket, role, action_log, broadcast, join_role, docket, dm_ticket, user_keys

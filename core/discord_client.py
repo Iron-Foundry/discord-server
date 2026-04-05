@@ -37,7 +37,6 @@ class DiscordClient(discord.Client):
         self._extra_listeners: dict[
             str, list[Callable[..., Coroutine[Any, Any, None]]]
         ] = {}
-        # Named references for services called directly from the client
         self.ticket_service: TicketService | None = None
         self.role_service: RoleService | None = None
         self.action_log_service: ActionLogService | None = None
