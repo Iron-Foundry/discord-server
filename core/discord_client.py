@@ -117,7 +117,15 @@ class DiscordClient(discord.Client):
 
         await self.service_handler.run_post_ready()
 
-        logger.info(await self.command_handler.sync())
+        registered = [
+            c.name for c in self.command_handler.tree.get_commands(guild=self._guild)
+        ]
+        logger.info(f"Commands in tree before sync: {registered}")
+        try:
+            synced = await self.command_handler.sync()
+            logger.info(f"Synced {len(synced)} command(s): {[c.name for c in synced]}")
+        except Exception:
+            logger.exception("Command sync failed")
 
     async def on_message(self, message: discord.Message) -> None:
         if message.author.bot:

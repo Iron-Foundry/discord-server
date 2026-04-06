@@ -5,11 +5,12 @@ import secrets
 import discord
 from loguru import logger
 
+from core.service_base import Service
 from user_keys.models import UserKey
 from user_keys.repository import MongoUserKeyRepository
 
 
-class UserKeyService:
+class UserKeyService(Service):
     """Manages per-user API keys for the Foundry API."""
 
     def __init__(
