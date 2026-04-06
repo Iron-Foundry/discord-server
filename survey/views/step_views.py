@@ -142,7 +142,6 @@ class TextAnswerView(discord.ui.View):
         )
         modal = SingleFieldModal(self._service, self._ticket_id, self._field, style)
         await interaction.response.send_modal(modal)
-        self.stop()
 
 
 class FieldSelect(discord.ui.Select):  # type: ignore[type-arg]
