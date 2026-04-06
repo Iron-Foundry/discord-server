@@ -21,8 +21,8 @@ class SurveyTicket(TicketTypeConfig):
     via ``/survey activate``.
     """
 
-    def __init__(self, staff_role_id: int, survey_service: "SurveyService") -> None:
-        self._teams = [TicketTeam(name="Staff", role_id=staff_role_id)]
+    def __init__(self, senior_staff_role_id: int, survey_service: "SurveyService") -> None:
+        self._teams = [TicketTeam(name="Senior Staff", role_id=senior_staff_role_id)]
         self._service = survey_service
 
     @property
@@ -95,14 +95,6 @@ class SurveyTicket(TicketTypeConfig):
     async def on_created(
         self, record: TicketRecord, channel: discord.TextChannel
     ) -> None:
-        mentions = [
-            team.get_mention_string(channel.guild)
-            for team in self.teams
-            if team.get_mention_string(channel.guild)
-        ]
-        if mentions:
-            await channel.send(" ".join(mentions))
-
         await self._service.start_survey(
             channel=channel,
             ticket_id=record.ticket_id,

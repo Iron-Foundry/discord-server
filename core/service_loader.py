@@ -267,9 +267,9 @@ async def load_all_services(
 
     # Wire survey → ticket after both are ready
     cfg = ConfigInterface()
-    staff_id_str = cfg.get_variable(ConfigVars.STAFF_ROLE_ID)
-    staff_id = int(staff_id_str) if staff_id_str else 0
-    survey.set_ticket_service(ticket, staff_id)
+    senior_staff_id_str = cfg.get_variable(ConfigVars.SENIOR_STAFF_ROLE_ID)
+    senior_staff_id = int(senior_staff_id_str) if senior_staff_id_str else 0
+    survey.set_ticket_service(ticket, senior_staff_id)
 
     dm_ticket = await load_dm_ticket_service(guild, ticket)
     _load_help_command(guild, tree, registry)

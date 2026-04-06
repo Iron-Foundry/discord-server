@@ -56,7 +56,7 @@ class SurveyService(Service):
                 )
 
     def set_ticket_service(
-        self, ticket_service: "TicketService", staff_role_id: int
+        self, ticket_service: "TicketService", senior_staff_role_id: int
     ) -> None:
         """Wire up TicketService and register the SurveyTicket type.
 
@@ -67,7 +67,9 @@ class SurveyService(Service):
         from survey.ticket_type import SurveyTicket
 
         self._ticket_service = ticket_service
-        ticket_type = SurveyTicket(staff_role_id=staff_role_id, survey_service=self)
+        ticket_type = SurveyTicket(
+            senior_staff_role_id=senior_staff_role_id, survey_service=self
+        )
         ticket_service.type_registry.register(ticket_type)
 
         if self._current_template:
