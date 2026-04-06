@@ -644,6 +644,11 @@ class ResponsesSubgroup(app_commands.Group):
             inline=True,
         )
 
+        if not responses:
+            embed.description = "*No responses yet.*"
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+
         # Text-field response counts
         for field in tmpl.fields:
             if field.type in ("short_text", "long_text"):
@@ -653,11 +658,6 @@ class ResponsesSubgroup(app_commands.Group):
                     value=f"{answered}/{total} answered (see CSV export for text responses)",
                     inline=False,
                 )
-
-        if not responses:
-            embed.description = "*No responses yet.*"
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
 
         # Generate charts for yes_no / select fields
         charts = await generate_summary_charts(tmpl.fields, responses)

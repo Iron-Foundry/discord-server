@@ -247,16 +247,22 @@ async def load_all_services(
     """
     from core.config import ConfigInterface, ConfigVars
 
-    ticket, role, action_log, broadcast, join_role, user_keys, survey = (
-        await asyncio.gather(
-            load_ticket_service(guild, tree, registry, mongo_uri, db_name, client),
-            load_role_service(guild, tree, registry, mongo_uri, db_name, client),
-            load_action_log_service(guild, tree, registry, mongo_uri, db_name, client),
-            load_broadcast_service(guild, tree, registry, mongo_uri, db_name),
-            load_join_role_service(guild, tree, registry, mongo_uri, db_name, client),
-            load_user_key_service(guild, tree, mongo_uri, db_name),
-            load_survey_service(guild, tree, registry, mongo_uri, db_name, client),
-        )
+    (
+        ticket,
+        role,
+        action_log,
+        broadcast,
+        join_role,
+        user_keys,
+        survey,
+    ) = await asyncio.gather(
+        load_ticket_service(guild, tree, registry, mongo_uri, db_name, client),
+        load_role_service(guild, tree, registry, mongo_uri, db_name, client),
+        load_action_log_service(guild, tree, registry, mongo_uri, db_name, client),
+        load_broadcast_service(guild, tree, registry, mongo_uri, db_name),
+        load_join_role_service(guild, tree, registry, mongo_uri, db_name, client),
+        load_user_key_service(guild, tree, mongo_uri, db_name),
+        load_survey_service(guild, tree, registry, mongo_uri, db_name, client),
     )
 
     # Wire survey → ticket after both are ready
