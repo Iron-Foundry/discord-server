@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
@@ -16,9 +16,9 @@ if TYPE_CHECKING:
     from broadcast.service import BroadcastService
     from core.discord_client import DiscordClient
     from dm_tickets.service import DMTicketService
-    from docket.service import DocketService
     from join_roles.service import JoinRoleService
     from roles.service import RoleService
+    from survey.service import SurveyService
     from tickets.ticket_service import TicketService
     from user_keys.service import UserKeyService
 
@@ -152,57 +152,27 @@ async def load_broadcast_service(
     return service
 
 
-async def load_docket_service(
+async def load_survey_service(
     guild: discord.Guild,
     tree: app_commands.CommandTree,
     registry: HelpRegistry,
     mongo_uri: str,
     db_name: str,
     client: DiscordClient,
-) -> DocketService:
-    """Initialise the docket service and register its slash commands."""
-    from docket.commands import DocketGroup
-    from docket.commands import register_help as register_docket_help
-    from core.config import ConfigVars
-    from docket.models import PanelType
-    from docket.panels.achievements import AchievementsPanel
-    from docket.panels.donations import DonationsPanel
-    from docket.panels.events import EventsPanel
-    from docket.panels.toc import TOCPanel
-    from docket.providers.protocol import ExternalApiProvider
-    from docket.providers.wise_old_man import WiseOldManProvider
-    from docket.repository import MongoDocketRepository
-    from docket.service import DocketService
+) -> SurveyService:
+    """Initialise the survey service and register its slash commands."""
+    from survey.commands import SurveyGroup
+    from survey.commands import register_help as register_survey_help
+    from survey.repository import MongoSurveyRepository
+    from survey.service import SurveyService
 
-    panels: dict[PanelType, Any] = {
-        PanelType.EVENTS: EventsPanel(),
-        PanelType.TOC: TOCPanel(),
-        PanelType.DONATIONS: DonationsPanel(),
-    }
-    providers: list[ExternalApiProvider] = []
-    wom_id_str = client.config.get_variable(ConfigVars.WOM_GROUP_ID)
-    if wom_id_str:
-        provider = WiseOldManProvider(group_id=int(wom_id_str))
-        providers.append(provider)
-        panels[PanelType.ACHIEVEMENTS] = AchievementsPanel(
-            provider=provider, wom_group_id=int(wom_id_str)
-        )
-    else:
-        logger.warning("WOM_GROUP_ID not set — AchievementsPanel disabled")
-
-    repo = MongoDocketRepository(mongo_uri=mongo_uri, db_name=db_name)
-    service = DocketService(
-        guild=guild,
-        client=client,
-        repo=repo,
-        panels=panels,
-        providers=providers,
-    )
+    repo = MongoSurveyRepository(mongo_uri=mongo_uri, db_name=db_name)
+    service = SurveyService(guild=guild, client=client, repo=repo)
     await service.initialize()
 
-    register_docket_help(registry)
-    tree.add_command(DocketGroup(service=service), guild=guild)
-    logger.info("Docket service initialised and commands registered")
+    register_survey_help(registry)
+    tree.add_command(SurveyGroup(service=service), guild=guild)
+    logger.info("Survey service initialised and commands registered")
     return service
 
 
@@ -264,28 +234,37 @@ async def load_all_services(
     ActionLogService,
     BroadcastService,
     JoinRoleService,
-    DocketService,
     DMTicketService,
     "UserKeyService",
+    SurveyService,
 ]:
     """Load all services, then register the help command.
 
     Independent services are loaded in parallel.  :class:`DMTicketService`
     is loaded after :class:`TicketService` because it depends on it.
+    :class:`SurveyService` is wired to :class:`TicketService` after both
+    are loaded so the survey ticket type can be registered.
     """
-    ticket, role, action_log, broadcast, join_role, docket, user_keys = (
+    from core.config import ConfigInterface, ConfigVars
+
+    ticket, role, action_log, broadcast, join_role, user_keys, survey = (
         await asyncio.gather(
             load_ticket_service(guild, tree, registry, mongo_uri, db_name, client),
             load_role_service(guild, tree, registry, mongo_uri, db_name, client),
-            load_action_log_service(
-                guild, tree, registry, mongo_uri, db_name, client
-            ),
+            load_action_log_service(guild, tree, registry, mongo_uri, db_name, client),
             load_broadcast_service(guild, tree, registry, mongo_uri, db_name),
             load_join_role_service(guild, tree, registry, mongo_uri, db_name, client),
-            load_docket_service(guild, tree, registry, mongo_uri, db_name, client),
             load_user_key_service(guild, tree, mongo_uri, db_name),
+            load_survey_service(guild, tree, registry, mongo_uri, db_name, client),
         )
     )
+
+    # Wire survey → ticket after both are ready
+    cfg = ConfigInterface()
+    staff_id_str = cfg.get_variable(ConfigVars.STAFF_ROLE_ID)
+    staff_id = int(staff_id_str) if staff_id_str else 0
+    survey.set_ticket_service(ticket, staff_id)
+
     dm_ticket = await load_dm_ticket_service(guild, ticket)
     _load_help_command(guild, tree, registry)
-    return ticket, role, action_log, broadcast, join_role, docket, dm_ticket, user_keys
+    return ticket, role, action_log, broadcast, join_role, dm_ticket, user_keys, survey

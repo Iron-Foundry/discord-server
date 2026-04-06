@@ -17,9 +17,9 @@ if TYPE_CHECKING:
     from action_log.service import ActionLogService
     from broadcast.service import BroadcastService
     from dm_tickets.service import DMTicketService
-    from docket.service import DocketService
     from join_roles.service import JoinRoleService
     from roles.service import RoleService
+    from survey.service import SurveyService
     from tickets.ticket_service import TicketService
     from user_keys.service import UserKeyService
 
@@ -43,9 +43,9 @@ class DiscordClient(discord.Client):
         self.action_log_service: ActionLogService | None = None
         self.broadcast_service: BroadcastService | None = None
         self.join_role_service: JoinRoleService | None = None
-        self.docket_service: DocketService | None = None
         self.dm_ticket_service: DMTicketService | None = None
         self.user_key_service: UserKeyService | None = None
+        self.survey_service: SurveyService | None = None
 
     async def _resolve_guild(self) -> None:
         """Look up the configured guild and bind it to the command handler."""
@@ -83,9 +83,9 @@ class DiscordClient(discord.Client):
             self.action_log_service,
             self.broadcast_service,
             self.join_role_service,
-            self.docket_service,
             self.dm_ticket_service,
             self.user_key_service,
+            self.survey_service,
         ) = services
         self.service_handler.register(*services)
         self._services_loaded = True

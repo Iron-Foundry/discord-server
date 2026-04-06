@@ -9,3 +9,4 @@ class TicketTypeId(str, Enum):
     APPLY_MENTOR = "apply_mentor"
     CONTACT_MENTOR = "contact_mentor"
     SENSITIVE = "sensitive"
+    SURVEY = "survey"

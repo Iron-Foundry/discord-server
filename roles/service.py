@@ -152,7 +152,7 @@ class RoleService(Service):
             try:
                 msg = await channel.fetch_message(panel.message_id)
                 await msg.delete()
-            except (discord.NotFound, discord.HTTPException):
+            except discord.NotFound, discord.HTTPException:
                 pass
         await self._repo.delete_panel(panel_id)
         del self._panels[panel_id]

@@ -17,9 +17,7 @@ class MongoUserKeyRepository:
 
     async def ensure_indexes(self) -> None:
         """Create indexes on startup. Safe to call multiple times."""
-        await self._keys.create_index(
-            [("discord_user_id", ASCENDING)], unique=True
-        )
+        await self._keys.create_index([("discord_user_id", ASCENDING)], unique=True)
         await self._keys.create_index([("key", ASCENDING)], unique=True)
         logger.info("MongoUserKeyRepository: indexes ensured")
 
@@ -43,6 +41,4 @@ class MongoUserKeyRepository:
                 {"discord_user_id": user_key.discord_user_id}, doc, upsert=True
             )
         except PyMongoError as e:
-            logger.error(
-                f"Failed to save key for user {user_key.discord_user_id}: {e}"
-            )
+            logger.error(f"Failed to save key for user {user_key.discord_user_id}: {e}")

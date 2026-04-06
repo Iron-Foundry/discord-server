@@ -31,9 +31,7 @@ def make_userkey_command(service: UserKeyService) -> app_commands.Command:  # ty
             )
             return
 
-        logger.debug(
-            f"userkey: action={action!r} invoked by {interaction.user}"
-        )
+        logger.debug(f"userkey: action={action!r} invoked by {interaction.user}")
 
         if action == "new":
             user_key = await service.generate_key(interaction.user)

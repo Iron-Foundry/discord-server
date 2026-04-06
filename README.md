@@ -1,7 +1,7 @@
 # Iron Foundry — Discord Bot
 
 The main Discord bot for the Iron Foundry OSRS clan. Handles the ticket system, role management,
-action logging, community dashboard panels, and general server automation.
+action logging, and general server automation.
 
 ---
 
@@ -57,7 +57,6 @@ All configuration is read from a `.env` file in the project root.
 | `ROLE_COLLECTION` | — | MongoDB collection name for role records. |
 | `USER_COLLECTION` | — | MongoDB collection name for user records. |
 | `DEBUG_MODE` | — | Set to any truthy value to enable debug logging. |
-| `WOM_GROUP_ID` | — | Wise Old Man group ID. Enables the Achievements panel in the docket. If unset, the panel is disabled. |
 
 ---
 
@@ -149,36 +148,87 @@ Manage roles that are automatically assigned to every new member when they join 
 | `/joinrole remove <role>` | Remove a role from the join roles list. | Senior Staff |
 | `/joinrole list` | List all configured join roles. | Staff |
 
-### /docket
+### /survey
 
-Manage a persistent community dashboard channel. Each panel is a live Discord message that
-is edited in-place when its data changes. Run `/docket setup` once to create the channel and
-post all panels; subsequent restarts re-attach to the existing messages automatically.
+Create and run community surveys and feedback forms. Templates are defined in TOML and saved for
+reuse. Only one survey may be active at a time; activating a template enables the survey ticket
+type in the panel.
+
+#### Template management
 
 | Command | Description | Access |
 |---|---|---|
-| `/docket setup <channel>` | Configure the docket channel and post all panels. | Senior Staff |
-| `/docket refresh [panel_type]` | Force-refresh one or all API-backed panels. | Staff |
-| `/docket reset` | Delete and re-post all panels in their original order (confirm dialog). | Senior Staff |
-| `/docket events add <title> <description>` | Add a clan event (optional: host, starts, ends, image_url). | Staff |
-| `/docket events remove <event_id>` | Remove a clan event (autocompletes from live entries). | Staff |
-| `/docket events list` | List all events with their IDs. | Staff |
-| `/docket toc add <channel> <description>` | Add a server guide entry (optional: position). | Staff |
-| `/docket toc remove <entry_id>` | Remove a server guide entry. | Staff |
-| `/docket toc move <entry_id> <position>` | Reorder a server guide entry. | Staff |
-| `/docket toc list` | List all TOC entries with their IDs. | Staff |
-| `/docket donations add <donor> <amount>` | Record a clan donation (optional: note). | Staff |
-| `/docket donations remove <entry_id>` | Remove a donation entry. | Staff |
-| `/docket donations list` | List all donations with their IDs. | Staff |
+| `/survey template import <name> <attachment>` | Import a `.toml` template file and save it under `name`. | Senior Staff |
+| `/survey template export <name>` | Download a template as a `.toml` file. | Senior Staff |
+| `/survey template replace <name> <attachment>` | Replace an existing template with a new file. | Senior Staff |
+| `/survey template list` | List all saved templates. | Staff |
+| `/survey template show <name>` | Show all fields of a template in detail. | Staff |
+| `/survey template delete <name>` | Delete a template (blocked if it is currently active). | Senior Staff |
 
-#### Panels
+#### Activation
 
-| Panel | Refresh | Description |
+| Command | Description | Access |
 |---|---|---|
-| Events | Manual | One embed per event — title, description, host, relative timestamps, optional banner. |
-| Server Guide | Manual | Numbered channel list sorted by position. |
-| Achievements | Hourly (WOM API) | Paginated recent clan achievements. Prev/Next buttons persist across restarts. Requires `WOM_GROUP_ID`. |
-| Donations | Manual | Most recent 15 donations sorted by date. |
+| `/survey activate <template>` | Set the active survey and enable the survey ticket type. | Senior Staff |
+| `/survey deactivate` | Deactivate the current survey and disable the ticket type. | Senior Staff |
+| `/survey status` | Show the active template, response count, and activation details. | Staff |
+
+#### Responses
+
+| Command | Description | Access |
+|---|---|---|
+| `/survey responses list [template]` | List respondents and per-ticket completion status. | Staff |
+| `/survey responses view <ticket_id>` | View a single response in full. | Staff |
+| `/survey responses export [template]` | Download all responses as a `.csv` file. | Staff |
+| `/survey responses summary [template]` | Aggregated stats with per-field bar charts (PNG). | Staff |
+| `/survey responses clear <template>` | Delete all responses for a template (confirm dialog). | Senior Staff |
+
+All `[template]` parameters default to the currently active survey when omitted.
+
+#### TOML template format
+
+```toml
+[survey]
+title       = "Monthly Feedback"
+description = "Let us know how things are going."   # optional
+
+[[fields]]
+id          = "recommend"
+type        = "yes_no"
+label       = "Would you recommend us to a friend?"
+required    = true
+
+[[fields]]
+id          = "rating"
+type        = "select"
+label       = "Overall experience"
+required    = true
+max_choices = 1
+options     = ["Excellent", "Good", "Average", "Poor"]
+
+[[fields]]
+id          = "highlight"
+type        = "short_text"
+label       = "What did you enjoy most?"
+required    = false
+
+[[fields]]
+id          = "other"
+type        = "long_text"
+label       = "Any other feedback?"
+required    = false
+```
+
+Valid field types: `yes_no` · `short_text` · `long_text` · `select`
+
+#### Survey flow
+
+When a user opens a survey ticket the bot steps through each field one at a time:
+- **Yes/No** — two buttons (Yes / No) with an optional Skip button for non-required fields.
+- **Short text / Long text** — an "Answer" button that opens a modal; optional Skip button.
+- **Select** — a Discord select menu; optional Skip button for non-required fields.
+
+After each answer the question message is deleted, the running-summary embed is updated, and the next question is posted. Once all fields are answered the user clicks **Submit Survey**, which auto-closes the ticket (full transcript and DM flow).
 
 ### /actionlog
 
@@ -258,9 +308,9 @@ On startup `setup_hook` resolves the guild and calls `load_all_services`, which 
 service initialisers concurrently via `asyncio.gather`, then registers `/help` once all
 command groups are in place.
 
-Services with a `post_ready` hook (e.g. `TicketService`, `DocketService`) are called after
+Services with a `post_ready` hook (e.g. `TicketService`) are called after
 `on_ready` once the live guild cache is available, allowing them to re-attach to existing
-channel messages and start background refresh loops.
+channel messages and start background tasks.
 
 ---
 

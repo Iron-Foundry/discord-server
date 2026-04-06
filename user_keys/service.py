@@ -13,9 +13,7 @@ from user_keys.repository import MongoUserKeyRepository
 class UserKeyService(Service):
     """Manages per-user API keys for the Foundry API."""
 
-    def __init__(
-        self, guild: discord.Guild, repo: MongoUserKeyRepository
-    ) -> None:
+    def __init__(self, guild: discord.Guild, repo: MongoUserKeyRepository) -> None:
         self._guild = guild
         self._repo = repo
 
