@@ -7,22 +7,22 @@ from typing import TYPE_CHECKING, Any, override
 import discord
 from loguru import logger
 
-from command_infra.help_registry import HelpRegistry
+from core.command_infra.help_registry import HelpRegistry
 from core.command_handler import CommandHandler
 from core.config import ConfigInterface, ConfigVars
 from core.service_handler import ServiceHandler
 from core.service_loader import load_all_services
 
 if TYPE_CHECKING:
-    from action_log.service import ActionLogService
-    from applications.service import ApplicationService
-    from broadcast.service import BroadcastService
-    from dm_tickets.service import DMTicketService
-    from join_roles.service import JoinRoleService
-    from roles.service import RoleService
-    from survey.service import SurveyService
-    from tickets.ticket_service import TicketService
-    from user_keys.service import UserKeyService
+    from features.action_log.service import ActionLogService
+    from features.broadcast.service import BroadcastService
+    from features.tickets.application_service import ApplicationService
+    from features.tickets.dm_service import DMTicketService
+    from features.member.join_roles.service import JoinRoleService
+    from features.member.roles.service import RoleService
+    from features.survey.service import SurveyService
+    from features.tickets.ticket_service import TicketService
+    from features.user_keys.service import UserKeyService
 
 
 class DiscordClient(discord.Client):

@@ -1,27 +1,36 @@
-"""Pure service-loading functions; no access to DiscordClient internals."""
+"""Service loading functions for the Foundry Discord bot.
+
+Loading order:
+  1. TicketService           — must load first (other services wire to it)
+  2. All independent services — loaded in parallel via asyncio.gather()
+  3. Ticket type wiring       — survey and application register their ticket types
+  4. Session restoration      — re-attach in-progress survey/application flows
+  5. DMTicketService          — depends on TicketService, loaded after wiring
+  6. Help command             — registered last so all services have added their entries
+"""
 
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import discord
 from discord import app_commands
 from loguru import logger
 
-from command_infra.help_registry import HelpRegistry
+from core.command_infra.help_registry import HelpRegistry
 
 if TYPE_CHECKING:
-    from action_log.service import ActionLogService
-    from applications.service import ApplicationService
-    from broadcast.service import BroadcastService
+    from features.action_log.service import ActionLogService
+    from features.broadcast.service import BroadcastService
     from core.discord_client import DiscordClient
-    from dm_tickets.service import DMTicketService
-    from join_roles.service import JoinRoleService
-    from roles.service import RoleService
-    from survey.service import SurveyService
-    from tickets.ticket_service import TicketService
-    from user_keys.service import UserKeyService
+    from features.tickets.application_service import ApplicationService
+    from features.tickets.dm_service import DMTicketService
+    from features.member.join_roles.service import JoinRoleService
+    from features.member.roles.service import RoleService
+    from features.survey.service import SurveyService
+    from features.tickets.ticket_service import TicketService
+    from features.user_keys.service import UserKeyService
 
 
 async def load_ticket_service(
@@ -33,13 +42,13 @@ async def load_ticket_service(
     client: DiscordClient,
 ) -> TicketService:
     """Initialise the ticket service and register its slash commands."""
-    from command_infra.handlers import HandlerGroup
-    from command_infra.handlers import register_help as register_handler_help
-    from tickets.commands import TicketGroup, TicketTypeGroup
-    from tickets.commands import register_help as register_ticket_help
-    from tickets.handlers.database import MongoTicketRepository
-    from tickets.ticket_service import TicketService
-    from tickets.types import register_all_types
+    from core.command_infra.handlers import HandlerGroup
+    from core.command_infra.handlers import register_help as register_handler_help
+    from features.tickets.commands import TicketGroup, TicketTypeGroup
+    from features.tickets.commands import register_help as register_ticket_help
+    from features.tickets.handlers.database import MongoTicketRepository
+    from features.tickets.ticket_service import TicketService
+    from features.tickets.types import register_all_types
 
     repo = MongoTicketRepository(mongo_uri=mongo_uri, db_name=db_name)
     service = TicketService(guild=guild, repo=repo, client=client)
@@ -64,10 +73,10 @@ async def load_role_service(
     client: DiscordClient,
 ) -> RoleService:
     """Initialise the role panel service and register its slash commands."""
-    from roles.commands import RolePanelGroup
-    from roles.commands import register_help as register_rolepanel_help
-    from roles.repository import MongoRolePanelRepository
-    from roles.service import RoleService
+    from features.member.roles.commands import RolePanelGroup
+    from features.member.roles.commands import register_help as register_rolepanel_help
+    from features.member.roles.repository import MongoRolePanelRepository
+    from features.member.roles.service import RoleService
 
     repo = MongoRolePanelRepository(mongo_uri=mongo_uri, db_name=db_name)
     service = RoleService(guild=guild, client=client, repo=repo)
@@ -88,10 +97,10 @@ async def load_action_log_service(
     client: DiscordClient,
 ) -> ActionLogService:
     """Initialise the action log service and register its slash commands."""
-    from action_log.repository import MongoActionLogRepository
-    from action_log.service import ActionLogService
-    from action_log.commands import ActionLogGroup
-    from action_log.commands import register_help as register_actionlog_help
+    from features.action_log.repository import MongoActionLogRepository
+    from features.action_log.service import ActionLogService
+    from features.action_log.commands import ActionLogGroup
+    from features.action_log.commands import register_help as register_actionlog_help
 
     repo = MongoActionLogRepository(mongo_uri=mongo_uri, db_name=db_name)
     service = ActionLogService(guild=guild, client=client, repo=repo)
@@ -112,11 +121,13 @@ async def load_join_role_service(
     client: DiscordClient,
 ) -> JoinRoleService:
     """Initialise the join role service and register its slash commands."""
-    from join_roles.commands import JoinRoleGroup
-    from join_roles.commands import register_help as register_joinrole_help
-    from join_roles.events import register as register_join_role_events
-    from join_roles.repository import MongoJoinRoleRepository
-    from join_roles.service import JoinRoleService
+    from features.member.join_roles.commands import JoinRoleGroup
+    from features.member.join_roles.commands import (
+        register_help as register_joinrole_help,
+    )
+    from features.member.join_roles.events import register as register_join_role_events
+    from features.member.join_roles.repository import MongoJoinRoleRepository
+    from features.member.join_roles.service import JoinRoleService
 
     repo = MongoJoinRoleRepository(mongo_uri=mongo_uri, db_name=db_name)
     service = JoinRoleService(guild=guild, repo=repo)
@@ -137,10 +148,10 @@ async def load_broadcast_service(
     db_name: str,
 ) -> BroadcastService:
     """Initialise the broadcast service and register its slash commands."""
-    from broadcast.repository import MongoBroadcastRepository
-    from broadcast.service import BroadcastService
-    from broadcast.commands import BroadcastGroup, make_broadcast_context_menu
-    from broadcast.commands import register_help as register_broadcast_help
+    from features.broadcast.repository import MongoBroadcastRepository
+    from features.broadcast.service import BroadcastService
+    from features.broadcast.commands import BroadcastGroup, make_broadcast_context_menu
+    from features.broadcast.commands import register_help as register_broadcast_help
 
     repo = MongoBroadcastRepository(mongo_uri=mongo_uri, db_name=db_name)
     service = BroadcastService(guild=guild, repo=repo)
@@ -162,10 +173,10 @@ async def load_survey_service(
     client: DiscordClient,
 ) -> SurveyService:
     """Initialise the survey service and register its slash commands."""
-    from survey.commands import SurveyGroup
-    from survey.commands import register_help as register_survey_help
-    from survey.repository import MongoSurveyRepository
-    from survey.service import SurveyService
+    from features.survey.commands import SurveyGroup
+    from features.survey.commands import register_help as register_survey_help
+    from features.survey.repository import MongoSurveyRepository
+    from features.survey.service import SurveyService
 
     repo = MongoSurveyRepository(mongo_uri=mongo_uri, db_name=db_name)
     service = SurveyService(guild=guild, client=client, repo=repo)
@@ -183,12 +194,12 @@ async def load_application_service(
     db_name: str,
 ) -> "ApplicationService":
     """Initialise the application service (staff & mentor step-through flows)."""
-    from applications.service import ApplicationService
-    from survey.repository import MongoSurveyRepository
+    from features.tickets.application_service import ApplicationService
+    from features.survey.repository import MongoSurveyRepository
 
     repo = MongoSurveyRepository(mongo_uri=mongo_uri, db_name=db_name)
     service = ApplicationService(guild=guild, repo=repo)
-    logger.info("Application service initialised")
+    await service.initialize()
     return service
 
 
@@ -199,9 +210,9 @@ async def load_user_key_service(
     db_name: str,
 ) -> "UserKeyService":
     """Initialise the user key service and register the /userkey command."""
-    from user_keys.commands import make_userkey_command
-    from user_keys.repository import MongoUserKeyRepository
-    from user_keys.service import UserKeyService
+    from features.user_keys.commands import make_userkey_command
+    from features.user_keys.repository import MongoUserKeyRepository
+    from features.user_keys.service import UserKeyService
 
     repo = MongoUserKeyRepository(mongo_uri=mongo_uri, db_name=db_name)
     service = UserKeyService(guild=guild, repo=repo)
@@ -217,7 +228,7 @@ async def load_dm_ticket_service(
     ticket_service: TicketService,
 ) -> DMTicketService:
     """Initialise the DM ticket service (depends on TicketService)."""
-    from dm_tickets.service import DMTicketService
+    from features.tickets.dm_service import DMTicketService
 
     service = DMTicketService(guild=guild, ticket_service=ticket_service)
     await service.initialize()
@@ -230,7 +241,7 @@ def _load_help_command(
     tree: app_commands.CommandTree,
     registry: HelpRegistry,
 ) -> None:
-    from command_infra.help import make_help_command, register_help
+    from core.command_infra.help import make_help_command, register_help
 
     register_help(registry)
     tree.add_command(make_help_command(registry), guild=guild)
@@ -265,16 +276,8 @@ async def load_all_services(
     """
     from core.config import ConfigInterface, ConfigVars
 
-    (
-        ticket,
-        role,
-        action_log,
-        broadcast,
-        join_role,
-        user_keys,
-        survey,
-        application,
-    ) = await asyncio.gather(
+    # ── 1 & 2. Ticket infrastructure + independent feature services (parallel) ─
+    _results = await asyncio.gather(
         load_ticket_service(guild, tree, registry, mongo_uri, db_name, client),
         load_role_service(guild, tree, registry, mongo_uri, db_name, client),
         load_action_log_service(guild, tree, registry, mongo_uri, db_name, client),
@@ -284,6 +287,14 @@ async def load_all_services(
         load_survey_service(guild, tree, registry, mongo_uri, db_name, client),
         load_application_service(guild, mongo_uri, db_name),
     )
+    ticket = cast("TicketService", _results[0])
+    role = cast("RoleService", _results[1])
+    action_log = cast("ActionLogService", _results[2])
+    broadcast = cast("BroadcastService", _results[3])
+    join_role = cast("JoinRoleService", _results[4])
+    user_keys = cast("UserKeyService", _results[5])
+    survey = cast("SurveyService", _results[6])
+    application = cast("ApplicationService", _results[7])
 
     cfg = ConfigInterface()
 
@@ -291,22 +302,21 @@ async def load_all_services(
         val = cfg.get_variable(var)
         return int(val) if val else 0
 
-    # Wire survey → ticket
+    # ── 3. Ticket type wiring ─────────────────────────────────────────────────
     senior_staff_id = _role_id(ConfigVars.SENIOR_STAFF_ROLE_ID)
     survey.set_ticket_service(ticket, senior_staff_id)
-
-    # Wire application → ticket (registers apply_staff and apply_mentor types)
     application.register_ticket_types(
         ticket_service=ticket,
         senior_staff_role_id=senior_staff_id,
         staff_role_id=_role_id(ConfigVars.STAFF_ROLE_ID),
     )
 
-    # Restore in-progress sessions from database (re-posts messages so views work)
+    # ── 4. Session restoration ────────────────────────────────────────────────
     await survey.restore_sessions()
     await application.restore_sessions()
 
     dm_ticket = await load_dm_ticket_service(guild, ticket)
+
     _load_help_command(guild, tree, registry)
     return (
         ticket,
