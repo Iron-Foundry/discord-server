@@ -28,6 +28,12 @@ class SurveyLike(Protocol):
         interaction: discord.Interaction,
     ) -> None: ...
 
+    async def handle_edit_previous(
+        self,
+        ticket_id: int,
+        interaction: discord.Interaction,
+    ) -> None: ...
+
 
 def build_field_embed(field: SurveyField, index: int, total: int) -> discord.Embed:
     type_labels = {
@@ -64,8 +70,31 @@ class SkipButton(discord.ui.Button):  # type: ignore[type-arg]
         await self._service.skip_field(self._ticket_id, self._field_id, interaction)
 
 
+class EditPreviousButton(discord.ui.Button):  # type: ignore[type-arg]
+    def __init__(self, service: SurveyLike, ticket_id: int) -> None:
+        super().__init__(
+            label="← Edit Previous",
+            style=discord.ButtonStyle.secondary,
+            row=1,
+        )
+        self._service = service
+        self._ticket_id = ticket_id
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
+        if self.view:
+            self.view.stop()
+        await self._service.handle_edit_previous(self._ticket_id, interaction)
+
+
 class YesNoView(discord.ui.View):
-    def __init__(self, service: SurveyLike, ticket_id: int, field: SurveyField) -> None:
+    def __init__(
+        self,
+        service: SurveyLike,
+        ticket_id: int,
+        field: SurveyField,
+        field_index: int,
+    ) -> None:
         super().__init__(timeout=None)
         self._service = service
         self._ticket_id = ticket_id
@@ -73,6 +102,8 @@ class YesNoView(discord.ui.View):
 
         if not field.required:
             self.add_item(SkipButton(service, ticket_id, field.id))
+        if field_index > 0:
+            self.add_item(EditPreviousButton(service, ticket_id))
 
     @discord.ui.button(label="Yes", style=discord.ButtonStyle.success, emoji="✅")
     async def yes_button(
@@ -135,7 +166,13 @@ class SingleFieldModal(discord.ui.Modal):
 
 
 class TextAnswerView(discord.ui.View):
-    def __init__(self, service: SurveyLike, ticket_id: int, field: SurveyField) -> None:
+    def __init__(
+        self,
+        service: SurveyLike,
+        ticket_id: int,
+        field: SurveyField,
+        field_index: int,
+    ) -> None:
         super().__init__(timeout=None)
         self._service = service
         self._ticket_id = ticket_id
@@ -143,6 +180,8 @@ class TextAnswerView(discord.ui.View):
 
         if not field.required:
             self.add_item(SkipButton(service, ticket_id, field.id))
+        if field_index > 0:
+            self.add_item(EditPreviousButton(service, ticket_id))
 
     @discord.ui.button(label="Answer", style=discord.ButtonStyle.primary, emoji="✏️")
     async def answer_button(
@@ -191,7 +230,13 @@ class FieldSelect(discord.ui.Select):  # type: ignore[type-arg]
 
 
 class SelectAnswerView(discord.ui.View):
-    def __init__(self, service: SurveyLike, ticket_id: int, field: SurveyField) -> None:
+    def __init__(
+        self,
+        service: SurveyLike,
+        ticket_id: int,
+        field: SurveyField,
+        field_index: int,
+    ) -> None:
         super().__init__(timeout=None)
         self._service = service
         self._ticket_id = ticket_id
@@ -201,3 +246,5 @@ class SelectAnswerView(discord.ui.View):
 
         if not field.required:
             self.add_item(SkipButton(service, ticket_id, field.id))
+        if field_index > 0:
+            self.add_item(EditPreviousButton(service, ticket_id))

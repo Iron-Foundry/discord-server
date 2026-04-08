@@ -59,3 +59,20 @@ class ApplicationCompleteView(discord.ui.View):
         await interaction.response.defer()
         self.stop()
         await self._service.handle_submit(self._ticket_id, interaction)
+
+    @discord.ui.button(
+        label="← Edit Previous", style=discord.ButtonStyle.secondary, row=1
+    )
+    async def edit_previous_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,  # type: ignore[type-arg]
+    ) -> None:
+        await interaction.response.defer()
+        self.stop()
+        if interaction.message:
+            try:
+                await interaction.message.delete()
+            except discord.NotFound:
+                pass
+        await self._service.handle_edit_previous(self._ticket_id, interaction)

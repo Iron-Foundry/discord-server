@@ -250,6 +250,44 @@ class SurveyService(Service):
         session.current_field_index += 1
         await self._advance(ticket_id, interaction)
 
+    async def handle_edit_previous(
+        self, ticket_id: int, interaction: discord.Interaction
+    ) -> None:
+        """Step back to the previous field, clearing its answer for re-entry."""
+        session = self._sessions.get(ticket_id)
+        template = self._current_template
+        channel = self._channels.get(ticket_id)
+        if not session or not template or not channel or session.current_field_index == 0:
+            return
+
+        question_msg = self._question_messages.pop(ticket_id, None)
+        if question_msg:
+            try:
+                await question_msg.delete()
+            except discord.NotFound:
+                pass
+
+        session.current_field_index -= 1
+        previous_field = template.fields[session.current_field_index]
+        session.answers.pop(previous_field.id, None)
+
+        await self._repo.update_response(
+            ticket_id,
+            answers=session.answers,
+            current_field_index=session.current_field_index,
+        )
+
+        summary_msg = self._summary_messages.get(ticket_id)
+        if summary_msg:
+            from features.survey.views.summary_view import build_summary_embed
+
+            try:
+                await summary_msg.edit(embed=build_summary_embed(template, session))
+            except discord.NotFound:
+                pass
+
+        await self._post_next_question(ticket_id)
+
     async def handle_submit(
         self, ticket_id: int, interaction: discord.Interaction
     ) -> None:
@@ -506,14 +544,15 @@ class SurveyService(Service):
             build_field_embed,
         )
 
-        embed = build_field_embed(field, session.current_field_index, total)
+        field_index = session.current_field_index
+        embed = build_field_embed(field, field_index, total)
 
         if field.type == "yes_no":
-            view: discord.ui.View = YesNoView(self, ticket_id, field)
+            view: discord.ui.View = YesNoView(self, ticket_id, field, field_index)
         elif field.type in ("short_text", "long_text"):
-            view = TextAnswerView(self, ticket_id, field)
+            view = TextAnswerView(self, ticket_id, field, field_index)
         else:
-            view = SelectAnswerView(self, ticket_id, field)
+            view = SelectAnswerView(self, ticket_id, field, field_index)
 
         msg = await channel.send(embed=embed, view=view)
         self._question_messages[ticket_id] = msg
