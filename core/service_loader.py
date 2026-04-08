@@ -13,6 +13,7 @@ from command_infra.help_registry import HelpRegistry
 
 if TYPE_CHECKING:
     from action_log.service import ActionLogService
+    from applications.service import ApplicationService
     from broadcast.service import BroadcastService
     from core.discord_client import DiscordClient
     from dm_tickets.service import DMTicketService
@@ -176,6 +177,21 @@ async def load_survey_service(
     return service
 
 
+async def load_application_service(
+    guild: discord.Guild,
+    mongo_uri: str,
+    db_name: str,
+) -> "ApplicationService":
+    """Initialise the application service (staff & mentor step-through flows)."""
+    from applications.service import ApplicationService
+    from survey.repository import MongoSurveyRepository
+
+    repo = MongoSurveyRepository(mongo_uri=mongo_uri, db_name=db_name)
+    service = ApplicationService(guild=guild, repo=repo)
+    logger.info("Application service initialised")
+    return service
+
+
 async def load_user_key_service(
     guild: discord.Guild,
     tree: app_commands.CommandTree,
@@ -237,13 +253,15 @@ async def load_all_services(
     DMTicketService,
     "UserKeyService",
     SurveyService,
+    "ApplicationService",
 ]:
     """Load all services, then register the help command.
 
     Independent services are loaded in parallel.  :class:`DMTicketService`
     is loaded after :class:`TicketService` because it depends on it.
-    :class:`SurveyService` is wired to :class:`TicketService` after both
-    are loaded so the survey ticket type can be registered.
+    :class:`SurveyService` and :class:`ApplicationService` are wired to
+    :class:`TicketService` after both are loaded so their ticket types can
+    be registered.
     """
     from core.config import ConfigInterface, ConfigVars
 
@@ -255,6 +273,7 @@ async def load_all_services(
         join_role,
         user_keys,
         survey,
+        application,
     ) = await asyncio.gather(
         load_ticket_service(guild, tree, registry, mongo_uri, db_name, client),
         load_role_service(guild, tree, registry, mongo_uri, db_name, client),
@@ -263,14 +282,40 @@ async def load_all_services(
         load_join_role_service(guild, tree, registry, mongo_uri, db_name, client),
         load_user_key_service(guild, tree, mongo_uri, db_name),
         load_survey_service(guild, tree, registry, mongo_uri, db_name, client),
+        load_application_service(guild, mongo_uri, db_name),
     )
 
-    # Wire survey → ticket after both are ready
     cfg = ConfigInterface()
-    senior_staff_id_str = cfg.get_variable(ConfigVars.SENIOR_STAFF_ROLE_ID)
-    senior_staff_id = int(senior_staff_id_str) if senior_staff_id_str else 0
+
+    def _role_id(var: ConfigVars) -> int:
+        val = cfg.get_variable(var)
+        return int(val) if val else 0
+
+    # Wire survey → ticket
+    senior_staff_id = _role_id(ConfigVars.SENIOR_STAFF_ROLE_ID)
     survey.set_ticket_service(ticket, senior_staff_id)
+
+    # Wire application → ticket (registers apply_staff and apply_mentor types)
+    application.register_ticket_types(
+        ticket_service=ticket,
+        senior_staff_role_id=senior_staff_id,
+        staff_role_id=_role_id(ConfigVars.STAFF_ROLE_ID),
+    )
+
+    # Restore in-progress sessions from database (re-posts messages so views work)
+    await survey.restore_sessions()
+    await application.restore_sessions()
 
     dm_ticket = await load_dm_ticket_service(guild, ticket)
     _load_help_command(guild, tree, registry)
-    return ticket, role, action_log, broadcast, join_role, dm_ticket, user_keys, survey
+    return (
+        ticket,
+        role,
+        action_log,
+        broadcast,
+        join_role,
+        dm_ticket,
+        user_keys,
+        survey,
+        application,
+    )

@@ -1,70 +1,30 @@
-import discord
+from __future__ import annotations
+
 from collections.abc import Callable, Coroutine
-from datetime import datetime, UTC
-from typing import Any
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
+
+import discord
 
 from common.ticket_types import TicketTypeId
-from tickets.models.ticket import TicketTypeConfig, TicketTeam, TicketRecord
+from tickets.models.ticket import TicketRecord, TicketTeam, TicketTypeConfig
 
-
-class ApplyStaffModal(discord.ui.Modal, title="Staff Application"):
-    rsn = discord.ui.TextInput(
-        label="RuneScape Name (RSN)",
-        placeholder="Your exact in-game name",
-        max_length=12,
-    )
-    experience = discord.ui.TextInput(
-        label="Experience",
-        placeholder="e.g. 2 years moderating Discord servers",
-        max_length=200,
-    )
-    region = discord.ui.TextInput(
-        label="Region",
-        placeholder="North America, Europe, Oceania, Asia, South America, Africa / Middle East",
-        max_length=30,
-    )
-    reason = discord.ui.TextInput(
-        label="Why do you want to be staff?",
-        placeholder="Tell us about your experience and motivation.",
-        style=discord.TextStyle.paragraph,
-        max_length=1000,
-    )
-
-    def __init__(
-        self,
-        callback: Callable[
-            [discord.Interaction, dict[str, Any]], Coroutine[Any, Any, Any]
-        ],
-    ) -> None:
-        super().__init__()
-        self._callback = callback
-
-    async def on_submit(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        metadata = {
-            "rsn": self.rsn.value,
-            "experience": self.experience.value,
-            "region": self.region.value,
-            "reason": self.reason.value,
-        }
-        ticket = await self._callback(interaction, metadata)
-        if ticket:
-            await interaction.followup.send(
-                f"Your ticket has been created: {ticket.channel.mention}",
-                ephemeral=True,
-            )
-        else:
-            await interaction.followup.send(
-                "Failed to create your ticket. You may already have one open, or please try again.",
-                ephemeral=True,
-            )
+if TYPE_CHECKING:
+    from applications.service import ApplicationService
 
 
 class ApplyStaffTicket(TicketTypeConfig):
-    """Staff application ticket."""
+    """Staff application ticket.
 
-    def __init__(self, senior_staff_role_id: int) -> None:
+    Uses a step-through question flow instead of an upfront modal.
+    The ticket remains open after submission so Senior Staff can review.
+    """
+
+    def __init__(
+        self, senior_staff_role_id: int, application_service: "ApplicationService"
+    ) -> None:
         self._teams = [TicketTeam(name="Senior Staff", role_id=senior_staff_role_id)]
+        self._service = application_service
 
     @property
     def identifier(self) -> str:
@@ -104,23 +64,38 @@ class ApplyStaffTicket(TicketTypeConfig):
             [discord.Interaction, dict[str, Any]], Coroutine[Any, Any, Any]
         ],
     ) -> discord.ui.Modal | None:
-        return ApplyStaffModal(callback)
+        return None
 
     def build_create_embed(self, record: TicketRecord) -> discord.Embed:
-        meta = record.metadata
         embed = discord.Embed(
             title=f"{self.emoji} Staff Application — #{record.ticket_id:04d}",
+            description=(
+                "Welcome! Please answer the questions below.\n"
+                "Senior Staff will review your responses and get back to you here."
+            ),
             color=self.color,
             timestamp=datetime.now(UTC),
         )
         embed.add_field(name="Applicant", value=f"<@{record.creator.id}>", inline=True)
-        embed.add_field(name="RSN", value=meta.get("rsn", "—"), inline=True)
-        embed.add_field(
-            name="Experience", value=meta.get("experience", "—"), inline=True
-        )
-        embed.add_field(name="Region", value=meta.get("region", "—"), inline=True)
-        embed.add_field(name="Motivation", value=meta.get("reason", "—"), inline=False)
-        embed.set_footer(
-            text="This ticket will auto-close after 24 hours of inactivity."
-        )
         return embed
+
+    async def on_reopened(self, record: TicketRecord, reopener: discord.Member) -> None:
+        await self._service.restore_session(record.ticket_id, record.channel_id)
+
+    async def on_created(
+        self, record: TicketRecord, channel: discord.TextChannel
+    ) -> None:
+        mentions = [
+            team.get_mention_string(channel.guild)
+            for team in self.teams
+            if team.get_mention_string(channel.guild)
+        ]
+        if mentions:
+            await channel.send(" ".join(mentions))
+        await self._service.start_application(
+            type_id=self.identifier,
+            channel=channel,
+            ticket_id=record.ticket_id,
+            applicant_id=record.creator.id,
+            guild_id=record.guild_id,
+        )

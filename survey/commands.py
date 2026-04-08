@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import io
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 from discord import app_commands
@@ -12,7 +12,7 @@ from loguru import logger
 from command_infra.checks import handle_check_failure, is_senior_staff, is_staff
 from command_infra.help_registry import HelpEntry, HelpGroup, HelpRegistry
 from survey.charts import generate_summary_charts
-from survey.models import SurveyTemplate
+from survey.models import SurveyResponse, SurveyTemplate
 from survey.toml_io import EXAMPLE_TOML, SurveyValidationError, export_toml, parse_toml
 
 if TYPE_CHECKING:
@@ -96,6 +96,11 @@ def register_help(registry: HelpRegistry) -> None:
                 HelpEntry(
                     "/survey responses summary [template]",
                     "Aggregated stats and per-field charts",
+                    "Staff",
+                ),
+                HelpEntry(
+                    "/survey responses browse [template] [user]",
+                    "Browse responses interactively with prev/next navigation",
                     "Staff",
                 ),
                 HelpEntry(
@@ -264,6 +269,233 @@ class _ConfirmClearView(discord.ui.View):
     ) -> None:
         await interaction.response.edit_message(content="Cancelled.", view=None)
         self.stop()
+
+
+# ---------------------------------------------------------------------------
+# Response browser view
+# ---------------------------------------------------------------------------
+
+_MODE_USER = "user"
+_MODE_QUESTION = "question"
+
+
+def _fmt_answer_short(val: Any) -> str:
+    """Format an answer compactly for question-mode rows."""
+    if val is None:
+        return "*—*"
+    if isinstance(val, bool):
+        return "✅ Yes" if val else "❌ No"
+    if isinstance(val, list):
+        joined = ", ".join(str(v) for v in val)
+        return joined[:150] + "…" if len(joined) > 150 else joined
+    text = str(val)
+    return text[:150] + "…" if len(text) > 150 else text
+
+
+def _fmt_answer_full(val: Any) -> str:
+    """Format an answer in full for single-response display."""
+    if val is None:
+        return "*Skipped / not answered*"
+    if isinstance(val, bool):
+        return "✅ Yes" if val else "❌ No"
+    if isinstance(val, list):
+        return ", ".join(str(v) for v in val)
+    text = str(val)
+    return text[:1021] + "..." if len(text) > 1024 else text
+
+
+class _BrowserView(discord.ui.View):
+    """Paginated embed browser for survey responses.
+
+    Two modes:
+    - *user*: each page shows one respondent's full response.
+    - *question*: each page shows one field with all respondents' answers.
+    """
+
+    def __init__(
+        self,
+        template: SurveyTemplate,
+        responses: list[SurveyResponse],
+        mode: str = _MODE_USER,
+    ) -> None:
+        super().__init__(timeout=120)
+        self._template = template
+        self._responses = responses
+        self._mode = mode
+        self._page = 0
+        self._refresh_controls()
+
+    def _page_count(self) -> int:
+        if self._mode == _MODE_USER:
+            return len(self._responses)
+        return len(self._template.fields)
+
+    def _refresh_controls(self) -> None:
+        total = self._page_count()
+        self.prev_button.disabled = self._page <= 0
+        self.next_button.disabled = self._page >= total - 1
+        self.mode_user_button.style = (
+            discord.ButtonStyle.primary
+            if self._mode == _MODE_USER
+            else discord.ButtonStyle.secondary
+        )
+        self.mode_question_button.style = (
+            discord.ButtonStyle.primary
+            if self._mode == _MODE_QUESTION
+            else discord.ButtonStyle.secondary
+        )
+
+    def build_embeds(self) -> list[discord.Embed]:
+        """Build the embed(s) for the current page and mode."""
+        if self._mode == _MODE_USER:
+            return self._build_user_embeds()
+        return [self._build_question_embed()]
+
+    def _build_user_embeds(self) -> list[discord.Embed]:
+        """One respondent's complete response, split across embeds as needed."""
+        total = len(self._responses)
+        if not self._responses:
+            return [
+                discord.Embed(
+                    description="*No responses to display.*",
+                    color=discord.Color.blurple(),
+                )
+            ]
+        response = self._responses[self._page]
+        color = discord.Color.blurple()
+
+        answer_fields = [
+            (field.label, _fmt_answer_full(response.answers.get(field.id)))
+            for field in self._template.fields
+        ]
+
+        # First embed: title + 3 header fields + up to 20 answer fields
+        first = discord.Embed(
+            title=(f"📋 {self._template.title} — Response {self._page + 1}/{total}"),
+            color=color,
+        )
+        status = "✅ Completed" if response.completed else "🔄 In progress"
+        first.add_field(
+            name="Respondent",
+            value=f"<@{response.respondent_id}>",
+            inline=True,
+        )
+        first.add_field(name="Ticket", value=f"#{response.ticket_id:04d}", inline=True)
+        first.add_field(name="Status", value=status, inline=True)
+        for name, value in answer_fields[:20]:
+            first.add_field(name=name, value=value, inline=False)
+
+        embeds: list[discord.Embed] = [first]
+        remaining = answer_fields[20:]
+
+        # Continuation embeds: up to 25 fields each (Discord cap)
+        while remaining:
+            cont = discord.Embed(color=color)
+            for name, value in remaining[:25]:
+                cont.add_field(name=name, value=value, inline=False)
+            remaining = remaining[25:]
+            embeds.append(cont)
+
+        embeds[-1].set_footer(text=f"Page {self._page + 1} / {total}  •  Mode: By User")
+        return embeds
+
+    def _build_question_embed(self) -> discord.Embed:
+        total_fields = len(self._template.fields)
+        field = self._template.fields[self._page]
+        embed = discord.Embed(
+            title=(
+                f"📋 {self._template.title}"
+                f" — Q{self._page + 1}/{total_fields}: {field.label}"
+            ),
+            color=discord.Color.blurple(),
+        )
+        if field.description:
+            embed.description = f"*{field.description}*"
+
+        if not self._responses:
+            embed.add_field(name="Answers", value="*No responses.*", inline=False)
+        else:
+            lines = [
+                f"<@{r.respondent_id}> (`#{r.ticket_id:04d}`): "
+                f"{_fmt_answer_short(r.answers.get(field.id))}"
+                for r in self._responses
+            ]
+            # Chunk into ≤1000-char embed fields (up to 5) to stay within limits
+            remaining = list(lines)
+            field_num = 0
+            while remaining and field_num < 5:
+                chunk: list[str] = []
+                length = 0
+                while remaining:
+                    line = remaining[0]
+                    if length + len(line) + 1 > 1000:
+                        break
+                    chunk.append(remaining.pop(0))
+                    length += len(line) + 1
+                if chunk:
+                    header = "Answers" if field_num == 0 else "\u200b"
+                    embed.add_field(name=header, value="\n".join(chunk), inline=False)
+                    field_num += 1
+            if remaining:
+                embed.add_field(
+                    name="\u200b",
+                    value=f"*… and {len(remaining)} more not shown.*",
+                    inline=False,
+                )
+
+        embed.set_footer(
+            text=(f"Question {self._page + 1} / {total_fields}  •  Mode: By Question")
+        )
+        return embed
+
+    @discord.ui.button(label="◀ Prev", style=discord.ButtonStyle.secondary, row=0)
+    async def prev_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,  # type: ignore[type-arg]
+    ) -> None:
+        self._page = max(0, self._page - 1)
+        self._refresh_controls()
+        await interaction.response.edit_message(embeds=self.build_embeds(), view=self)
+
+    @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.secondary, row=0)
+    async def next_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,  # type: ignore[type-arg]
+    ) -> None:
+        total = self._page_count()
+        self._page = min(total - 1, self._page + 1)
+        self._refresh_controls()
+        await interaction.response.edit_message(embeds=self.build_embeds(), view=self)
+
+    @discord.ui.button(label="By User", style=discord.ButtonStyle.primary, row=1)
+    async def mode_user_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,  # type: ignore[type-arg]
+    ) -> None:
+        if self._mode == _MODE_USER:
+            await interaction.response.defer()
+            return
+        self._mode = _MODE_USER
+        self._page = 0
+        self._refresh_controls()
+        await interaction.response.edit_message(embeds=self.build_embeds(), view=self)
+
+    @discord.ui.button(label="By Question", style=discord.ButtonStyle.secondary, row=1)
+    async def mode_question_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,  # type: ignore[type-arg]
+    ) -> None:
+        if self._mode == _MODE_QUESTION:
+            await interaction.response.defer()
+            return
+        self._mode = _MODE_QUESTION
+        self._page = 0
+        self._refresh_controls()
+        await interaction.response.edit_message(embeds=self.build_embeds(), view=self)
 
 
 # ---------------------------------------------------------------------------
@@ -664,6 +896,48 @@ class ResponsesSubgroup(app_commands.Group):
         files = [file for _, file in charts]
 
         await interaction.followup.send(embed=embed, files=files or [], ephemeral=True)
+
+    # /survey responses browse
+    @app_commands.command(
+        name="browse", description="Browse responses interactively with prev/next"
+    )
+    @app_commands.describe(
+        template="Template to browse (defaults to active)",
+        user="Narrow to a specific respondent",
+    )
+    @app_commands.autocomplete(template=_template_autocomplete)
+    @is_staff()
+    async def browse_responses(
+        self,
+        interaction: discord.Interaction,
+        template: str | None = None,
+        user: discord.Member | None = None,
+    ) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        tmpl = await self._resolve_template(template)
+        if not tmpl:
+            await interaction.followup.send(
+                "No template specified and no active survey.", ephemeral=True
+            )
+            return
+        all_responses = await self._service.get_responses(tmpl.template_id)
+        responses = (
+            [r for r in all_responses if r.respondent_id == user.id]
+            if user
+            else all_responses
+        )
+        if not responses:
+            msg = (
+                f"No responses from {user.mention} for `{tmpl.template_id}`."
+                if user
+                else f"No responses for `{tmpl.template_id}`."
+            )
+            await interaction.followup.send(msg, ephemeral=True)
+            return
+        view = _BrowserView(tmpl, responses)
+        await interaction.followup.send(
+            embeds=view.build_embeds(), view=view, ephemeral=True
+        )
 
     # /survey responses clear
     @app_commands.command(

@@ -38,6 +38,7 @@ class SurveyResponse(BaseModel):
     template_id: str
     respondent_id: int
     guild_id: int
+    channel_id: int | None = None
     answers: dict[str, Any] = {}
     completed: bool = False
     started_at: datetime

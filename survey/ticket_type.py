@@ -21,7 +21,9 @@ class SurveyTicket(TicketTypeConfig):
     via ``/survey activate``.
     """
 
-    def __init__(self, senior_staff_role_id: int, survey_service: "SurveyService") -> None:
+    def __init__(
+        self, senior_staff_role_id: int, survey_service: "SurveyService"
+    ) -> None:
         self._teams = [TicketTeam(name="Senior Staff", role_id=senior_staff_role_id)]
         self._service = survey_service
 
@@ -91,6 +93,9 @@ class SurveyTicket(TicketTypeConfig):
             )
         embed.set_footer(text="The bot will step you through each question below.")
         return embed
+
+    async def on_reopened(self, record: TicketRecord, reopener: discord.Member) -> None:
+        await self._service.restore_session(record.ticket_id, record.channel_id)
 
     async def on_created(
         self, record: TicketRecord, channel: discord.TextChannel

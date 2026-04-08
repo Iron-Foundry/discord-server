@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 from .general import GeneralTicket
 from .rankup import RankupTicket, RankupModal
 from .join_cc import JoinCCTicket
-from .apply_staff import ApplyStaffTicket, ApplyStaffModal
-from .apply_mentor import ApplyMentorTicket, ApplyMentorModal
+from .apply_staff import ApplyStaffTicket
+from .apply_mentor import ApplyMentorTicket
 from .sensitive import SensitiveTicket
 from .contact_mentor import ContactMentorTicket, ContactMentorModal
 
@@ -19,9 +19,7 @@ __all__ = [
     "RankupModal",
     "JoinCCTicket",
     "ApplyStaffTicket",
-    "ApplyStaffModal",
     "ApplyMentorTicket",
-    "ApplyMentorModal",
     "SensitiveTicket",
     "ContactMentorTicket",
     "ContactMentorModal",
@@ -34,10 +32,13 @@ def register_all_types(service: "TicketService") -> None:
     Register all ticket types with the TicketService.
     Role IDs are read from environment variables:
 
-      STAFF_ROLE_ID        — Handles General, Rankup, Join CC, Apply Mentor
-      SENIOR_STAFF_ROLE_ID — Handles Apply to Staff
+      STAFF_ROLE_ID        — Handles General, Rankup, Join CC, Contact Mentor
       SENIOR_STAFF_ROLE_ID — Handles Apply to Staff and Sensitive tickets
       OWNER_ROLE_ID        — Handles Sensitive tickets
+      MENTOR_ROLE_ID       — Handles Contact Mentor tickets
+
+    Note: ApplyStaffTicket and ApplyMentorTicket are registered separately
+    by ApplicationService.register_ticket_types() after it is initialised.
     """
     from core.config import ConfigInterface, ConfigVars
 
@@ -54,10 +55,6 @@ def register_all_types(service: "TicketService") -> None:
     service.type_registry.register(GeneralTicket(staff_role_id=staff))
     service.type_registry.register(RankupTicket(staff_role_id=staff))
     service.type_registry.register(JoinCCTicket(staff_role_id=staff))
-    service.type_registry.register(
-        ApplyStaffTicket(senior_staff_role_id=role_id(ConfigVars.SENIOR_STAFF_ROLE_ID))
-    )
-    service.type_registry.register(ApplyMentorTicket(staff_role_id=staff))
     service.type_registry.register(
         ContactMentorTicket(
             mentor_role_id=role_id(ConfigVars.MENTOR_ROLE_ID), staff_role_id=staff

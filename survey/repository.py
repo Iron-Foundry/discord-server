@@ -110,6 +110,9 @@ class MongoSurveyRepository:
             responses.append(SurveyResponse.model_validate(doc))
         return responses
 
+    async def delete_response(self, ticket_id: int) -> None:
+        await self._responses.delete_one({"ticket_id": ticket_id})
+
     async def delete_responses_for_template(
         self, guild_id: int, template_id: str
     ) -> int:
