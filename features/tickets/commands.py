@@ -267,6 +267,10 @@ class TicketGroup(
                 interaction.user.id, limit=25
             )
 
+        def _is_transcriptable(t: TicketRecord) -> bool:
+            tt = self._service.type_registry.get(t.ticket_type)
+            return tt is None or not tt.sensitive
+
         def _choice_name(t: TicketRecord) -> str:
             name = f"#{t.ticket_id:04d} — {t.ticket_type.replace('_', ' ').title()}"
             if caller_is_staff:
@@ -280,7 +284,7 @@ class TicketGroup(
         return [
             app_commands.Choice(name=_choice_name(t), value=t.ticket_id)
             for t in tickets
-            if not current or current in str(t.ticket_id)
+            if _is_transcriptable(t) and (not current or current in str(t.ticket_id))
         ]
 
     # ------------------------------------------------------------------
@@ -518,14 +522,30 @@ class TicketGroup(
     async def reopen_autocomplete(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[int]]:
-        tickets = await self._service.get_closed_tickets_by_user(
-            interaction.user.id, limit=25
+        staff_role_id_str = os.getenv("STAFF_ROLE_ID")
+        caller_is_staff = (
+            isinstance(interaction.user, discord.Member)
+            and staff_role_id_str is not None
+            and any(r.id == int(staff_role_id_str) for r in interaction.user.roles)
         )
-        return [
-            app_commands.Choice(
-                name=f"#{t.ticket_id:04d} — {t.ticket_type.replace('_', ' ').title()}",
-                value=t.ticket_id,
+
+        if caller_is_staff:
+            tickets = await self._service.repo.get_recent_closed_tickets(
+                self._service.guild.id, limit=25
             )
+        else:
+            tickets = await self._service.get_closed_tickets_by_user(
+                interaction.user.id, limit=25
+            )
+
+        def _choice_name(t: TicketRecord) -> str:
+            name = f"#{t.ticket_id:04d} — {t.ticket_type.replace('_', ' ').title()}"
+            if caller_is_staff:
+                name += f" ({t.creator.display_name})"
+            return name
+
+        return [
+            app_commands.Choice(name=_choice_name(t), value=t.ticket_id)
             for t in tickets
             if not current or current in str(t.ticket_id)
         ]
