@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-import secrets
+import os
 
 import discord
 from loguru import logger
+from xkcdpass import xkcd_password as xp
 
 from core.service_base import Service
 from features.user_keys.models import UserKey
 from features.user_keys.repository import MongoUserKeyRepository
+
+_WORDLIST_PATH = os.path.join(os.path.dirname(__file__), "wordlist.txt")
+_WORDLIST = xp.generate_wordlist(wordfile=_WORDLIST_PATH, min_length=3)
 
 
 class UserKeyService(Service):
@@ -33,7 +37,7 @@ class UserKeyService(Service):
             discord_username=str(member),
             guild_id=self._guild.id,
             guild_name=self._guild.name,
-            key=secrets.token_urlsafe(32),
+            key=xp.generate_xkcdpassword(_WORDLIST, numwords=5, delimiter="-"),
         )
         await self._repo.save(user_key)
         logger.info(f"UserKeyService: generated new key for {member} ({member.id})")
