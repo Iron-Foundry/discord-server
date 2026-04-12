@@ -73,6 +73,40 @@ class MongoUserKeyRepository:
                 f"Failed to upsert user profile for {user_key.discord_user_id}: {e}"
             )
 
+    async def get_user_profile(self, discord_user_id: int) -> dict | None:
+        """Return the unified user profile doc, or None if not found."""
+        try:
+            return await self._db["users"].find_one(
+                {"discord_user_id": discord_user_id}, {"_id": 0}
+            )
+        except PyMongoError as e:
+            logger.error(f"Failed to fetch user profile for {discord_user_id}: {e}")
+            return None
+
+    async def link_rsn(self, discord_user_id: int, rsn: str) -> None:
+        """Set the RSN on a user profile, creating the doc if it does not exist."""
+        now = datetime.now(timezone.utc)
+        try:
+            await self._db["users"].update_one(
+                {"discord_user_id": discord_user_id},
+                {
+                    "$setOnInsert": {
+                        "discord_user_id": discord_user_id,
+                        "discord_username": "",
+                        "guild_id": 0,
+                        "guild_name": "",
+                        "clan_rank": None,
+                        "ticket_ids": [],
+                        "stats_opt_out": False,
+                        "created_at": now,
+                    },
+                    "$set": {"rsn": rsn, "updated_at": now},
+                },
+                upsert=True,
+            )
+        except PyMongoError as e:
+            logger.error(f"Failed to link RSN for {discord_user_id}: {e}")
+
     async def set_stats_opt_out(self, discord_user_id: int, opt_out: bool) -> None:
         """Set or clear the stats opt-out flag on a user profile.
 

@@ -30,6 +30,15 @@ class UserKeyService(Service):
         """Return the member's current active key, or None."""
         return await self._repo.get_by_user(member.id)
 
+    async def get_user_profile(self, member: discord.Member) -> dict | None:
+        """Return the unified user profile for a member, or None."""
+        return await self._repo.get_user_profile(member.id)
+
+    async def link_rsn(self, member: discord.Member, rsn: str) -> None:
+        """Link an RSN to a member's user profile."""
+        await self._repo.link_rsn(member.id, rsn)
+        logger.info(f"UserKeyService: linked RSN {rsn!r} for {member} ({member.id})")
+
     async def set_stats_opt_out(self, member: discord.Member, opt_out: bool) -> None:
         """Set or clear the stats opt-out flag for a member."""
         await self._repo.set_stats_opt_out(member.id, opt_out)

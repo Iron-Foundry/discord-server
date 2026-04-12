@@ -210,6 +210,7 @@ async def load_user_key_service(
     db_name: str,
 ) -> "UserKeyService":
     """Initialise the user key service and register the /userkey command."""
+    from features.account.commands import AccountGroup
     from features.user_keys.commands import make_privacy_command, make_userkey_command
     from features.user_keys.repository import MongoUserKeyRepository
     from features.user_keys.service import UserKeyService
@@ -220,7 +221,10 @@ async def load_user_key_service(
 
     tree.add_command(make_userkey_command(service), guild=guild)
     tree.add_command(make_privacy_command(service), guild=guild)
-    logger.info("User key service initialised and /userkey, /privacy commands registered")
+    tree.add_command(AccountGroup(service=service), guild=guild)
+    logger.info(
+        "User key service initialised and /userkey, /privacy, /account commands registered"
+    )
     return service
 
 
