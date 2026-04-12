@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from loguru import logger
 from pymongo import ASCENDING, AsyncMongoClient
 from pymongo.errors import PyMongoError
@@ -42,3 +44,60 @@ class MongoUserKeyRepository:
             )
         except PyMongoError as e:
             logger.error(f"Failed to save key for user {user_key.discord_user_id}: {e}")
+
+    async def upsert_user_profile(self, user_key: UserKey) -> None:
+        """Create or refresh the unified user profile for this user key."""
+        now = datetime.now(timezone.utc)
+        try:
+            await self._db["users"].update_one(
+                {"discord_user_id": user_key.discord_user_id},
+                {
+                    "$setOnInsert": {
+                        "discord_user_id": user_key.discord_user_id,
+                        "rsn": None,
+                        "clan_rank": None,
+                        "ticket_ids": [],
+                        "created_at": now,
+                    },
+                    "$set": {
+                        "discord_username": user_key.discord_username,
+                        "guild_id": user_key.guild_id,
+                        "guild_name": user_key.guild_name,
+                        "updated_at": now,
+                    },
+                },
+                upsert=True,
+            )
+        except PyMongoError as e:
+            logger.error(
+                f"Failed to upsert user profile for {user_key.discord_user_id}: {e}"
+            )
+
+    async def set_stats_opt_out(self, discord_user_id: int, opt_out: bool) -> None:
+        """Set or clear the stats opt-out flag on a user profile.
+
+        Upserts a minimal doc if the user has no profile yet.
+        """
+        now = datetime.now(timezone.utc)
+        try:
+            await self._db["users"].update_one(
+                {"discord_user_id": discord_user_id},
+                {
+                    "$setOnInsert": {
+                        "discord_user_id": discord_user_id,
+                        "discord_username": "",
+                        "guild_id": 0,
+                        "guild_name": "",
+                        "rsn": None,
+                        "clan_rank": None,
+                        "ticket_ids": [],
+                        "created_at": now,
+                    },
+                    "$set": {"stats_opt_out": opt_out, "updated_at": now},
+                },
+                upsert=True,
+            )
+        except PyMongoError as e:
+            logger.error(
+                f"Failed to set stats_opt_out for {discord_user_id}: {e}"
+            )

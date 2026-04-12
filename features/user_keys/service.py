@@ -30,6 +30,10 @@ class UserKeyService(Service):
         """Return the member's current active key, or None."""
         return await self._repo.get_by_user(member.id)
 
+    async def set_stats_opt_out(self, member: discord.Member, opt_out: bool) -> None:
+        """Set or clear the stats opt-out flag for a member."""
+        await self._repo.set_stats_opt_out(member.id, opt_out)
+
     async def generate_key(self, member: discord.Member) -> UserKey:
         """Generate a new key for the member, replacing any existing one."""
         user_key = UserKey(
@@ -40,5 +44,6 @@ class UserKeyService(Service):
             key=xp.generate_xkcdpassword(_WORDLIST, numwords=5, delimiter="-"),
         )
         await self._repo.save(user_key)
+        await self._repo.upsert_user_profile(user_key)
         logger.info(f"UserKeyService: generated new key for {member} ({member.id})")
         return user_key
