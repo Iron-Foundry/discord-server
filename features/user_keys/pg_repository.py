@@ -128,6 +128,8 @@ class PgUserKeyRepository:
     async def upsert_member(self, member: discord.Member) -> None:
         """Insert a bare user profile for a guild member, preserving existing RSN."""
         now = datetime.now(timezone.utc)
+        joined_at = member.joined_at or now
+        role_names = [r.name for r in member.roles if r.name != "@everyone"]
         async with self._factory() as session:
             result = await session.execute(
                 update(User)
@@ -135,6 +137,7 @@ class PgUserKeyRepository:
                 .values(
                     discord_username=str(member),
                     guild_id=member.guild.id,
+                    discord_roles=role_names,
                     updated_at=now,
                 )
                 .returning(User.discord_user_id)
@@ -145,7 +148,8 @@ class PgUserKeyRepository:
                         discord_user_id=member.id,
                         discord_username=str(member),
                         guild_id=member.guild.id,
-                        created_at=now,
+                        discord_roles=role_names,
+                        created_at=joined_at,
                         updated_at=now,
                     )
                 )

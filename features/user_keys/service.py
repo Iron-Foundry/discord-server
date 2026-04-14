@@ -98,8 +98,15 @@ class UserKeyService(Service):
                 return
             await self.unregister_member(member)
 
+        async def on_member_update(before: discord.Member, after: discord.Member) -> None:
+            if after.guild.id != self._guild.id or after.bot:
+                return
+            if before.roles != after.roles:
+                await self.register_member(after)
+
         client.add_listener(on_member_join, "on_member_join")
         client.add_listener(on_member_remove, "on_member_remove")
+        client.add_listener(on_member_update, "on_member_update")
 
     async def generate_key(self, member: discord.Member) -> UserKey:
         """Generate a new key for the member, replacing any existing one."""
