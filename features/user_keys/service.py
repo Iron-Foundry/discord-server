@@ -55,11 +55,25 @@ class UserKeyService(Service):
         """Upsert a bare profile for every current guild member."""
         members = self._guild.members
         logger.info("UserKeyService: syncing {} guild member(s) to DB", len(members))
+        ok = 0
+        failed = 0
         for member in members:
             if member.bot:
                 continue
-            await self._repo.upsert_member(member)
-        logger.info("UserKeyService: guild member sync complete")
+            try:
+                await self._repo.upsert_member(member)
+                ok += 1
+            except Exception as exc:
+                logger.error(
+                    "UserKeyService: failed to upsert member {} ({}): {}",
+                    member,
+                    member.id,
+                    exc,
+                )
+                failed += 1
+        logger.info(
+            "UserKeyService: guild member sync complete — ok={} failed={}", ok, failed
+        )
 
     async def register_member(self, member: discord.Member) -> None:
         """Create a bare user profile for a new guild member."""
