@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import discord
 from loguru import logger
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -122,6 +123,39 @@ class PgUserKeyRepository:
         )
         async with self._factory() as session:
             await session.execute(stmt)
+            await session.commit()
+
+    async def upsert_member(self, member: discord.Member) -> None:
+        """Insert a bare user profile for a guild member, preserving existing RSN."""
+        now = datetime.now(timezone.utc)
+        stmt = (
+            pg_insert(User)
+            .values(
+                discord_user_id=member.id,
+                discord_username=str(member),
+                guild_id=member.guild.id,
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=["discord_user_id"],
+                set_={
+                    "discord_username": str(member),
+                    "guild_id": member.guild.id,
+                    "updated_at": now,
+                },
+            )
+        )
+        async with self._factory() as session:
+            await session.execute(stmt)
+            await session.commit()
+
+    async def delete_user(self, discord_user_id: int) -> None:
+        """Delete a user profile and all associated data."""
+        async with self._factory() as session:
+            await session.execute(
+                delete(User).where(User.discord_user_id == discord_user_id)
+            )
             await session.commit()
 
     async def set_stats_opt_out(self, discord_user_id: int, opt_out: bool) -> None:

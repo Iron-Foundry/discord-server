@@ -201,6 +201,7 @@ async def load_user_key_service(
     guild: discord.Guild,
     tree: app_commands.CommandTree,
     session_factory: async_sessionmaker[AsyncSession],
+    client: DiscordClient,
 ) -> "UserKeyService":
     """Initialise the user key service and register the /userkey command."""
     from features.account.commands import AccountGroup
@@ -211,6 +212,8 @@ async def load_user_key_service(
     repo = PgUserKeyRepository(session_factory=session_factory)
     service = UserKeyService(guild=guild, repo=repo)
     await service.initialize()
+    await service.sync_all_members()
+    service.register_events(client)
 
     tree.add_command(make_userkey_command(service), guild=guild)
     tree.add_command(make_privacy_command(service), guild=guild)
@@ -280,7 +283,7 @@ async def load_all_services(
         load_action_log_service(guild, tree, registry, session_factory, client),
         load_broadcast_service(guild, tree, registry, session_factory),
         load_join_role_service(guild, tree, registry, session_factory, client),
-        load_user_key_service(guild, tree, session_factory),
+        load_user_key_service(guild, tree, session_factory, client),
         load_survey_service(guild, tree, registry, session_factory, client),
         load_application_service(guild, session_factory),
     )

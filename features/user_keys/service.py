@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
 
 import discord
 from loguru import logger
@@ -8,7 +9,10 @@ from xkcdpass import xkcd_password as xp
 
 from core.service_base import Service
 from features.user_keys.models import UserKey
-from features.user_keys.repository import MongoUserKeyRepository
+from features.user_keys.pg_repository import PgUserKeyRepository
+
+if TYPE_CHECKING:
+    from core.discord_client import DiscordClient
 
 _WORDLIST_PATH = os.path.join(os.path.dirname(__file__), "wordlist.txt")
 _WORDLIST = xp.generate_wordlist(wordfile=_WORDLIST_PATH, min_length=3)
@@ -17,7 +21,7 @@ _WORDLIST = xp.generate_wordlist(wordfile=_WORDLIST_PATH, min_length=3)
 class UserKeyService(Service):
     """Manages per-user API keys for the Foundry API."""
 
-    def __init__(self, guild: discord.Guild, repo: MongoUserKeyRepository) -> None:
+    def __init__(self, guild: discord.Guild, repo: PgUserKeyRepository) -> None:
         self._guild = guild
         self._repo = repo
 
@@ -42,6 +46,42 @@ class UserKeyService(Service):
     async def set_stats_opt_out(self, member: discord.Member, opt_out: bool) -> None:
         """Set or clear the stats opt-out flag for a member."""
         await self._repo.set_stats_opt_out(member.id, opt_out)
+
+    async def sync_all_members(self) -> None:
+        """Upsert a bare profile for every current guild member."""
+        members = self._guild.members
+        logger.info("UserKeyService: syncing {} guild member(s) to DB", len(members))
+        for member in members:
+            if member.bot:
+                continue
+            await self._repo.upsert_member(member)
+        logger.info("UserKeyService: guild member sync complete")
+
+    async def register_member(self, member: discord.Member) -> None:
+        """Create a bare user profile for a new guild member."""
+        await self._repo.upsert_member(member)
+        logger.info("UserKeyService: registered new member {} ({})", member, member.id)
+
+    async def unregister_member(self, member: discord.Member) -> None:
+        """Remove a member's user profile on guild leave."""
+        await self._repo.delete_user(member.id)
+        logger.info("UserKeyService: removed member {} ({})", member, member.id)
+
+    def register_events(self, client: DiscordClient) -> None:
+        """Register join/leave listeners on the Discord client."""
+
+        async def on_member_join(member: discord.Member) -> None:
+            if member.guild.id != self._guild.id or member.bot:
+                return
+            await self.register_member(member)
+
+        async def on_member_remove(member: discord.Member) -> None:
+            if member.guild.id != self._guild.id or member.bot:
+                return
+            await self.unregister_member(member)
+
+        client.add_listener(on_member_join, "on_member_join")
+        client.add_listener(on_member_remove, "on_member_remove")
 
     async def generate_key(self, member: discord.Member) -> UserKey:
         """Generate a new key for the member, replacing any existing one."""
