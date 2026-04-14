@@ -128,26 +128,27 @@ class PgUserKeyRepository:
     async def upsert_member(self, member: discord.Member) -> None:
         """Insert a bare user profile for a guild member, preserving existing RSN."""
         now = datetime.now(timezone.utc)
-        stmt = (
-            pg_insert(User)
-            .values(
-                discord_user_id=member.id,
-                discord_username=str(member),
-                guild_id=member.guild.id,
-                created_at=now,
-                updated_at=now,
-            )
-            .on_conflict_do_update(
-                index_elements=["discord_user_id"],
-                set_={
-                    "discord_username": str(member),
-                    "guild_id": member.guild.id,
-                    "updated_at": now,
-                },
-            )
-        )
         async with self._factory() as session:
-            await session.execute(stmt)
+            result = await session.execute(
+                update(User)
+                .where(User.discord_user_id == member.id)
+                .values(
+                    discord_username=str(member),
+                    guild_id=member.guild.id,
+                    updated_at=now,
+                )
+                .returning(User.discord_user_id)
+            )
+            if result.rowcount == 0:
+                await session.execute(
+                    pg_insert(User).values(
+                        discord_user_id=member.id,
+                        discord_username=str(member),
+                        guild_id=member.guild.id,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
             await session.commit()
 
     async def delete_user(self, discord_user_id: int) -> None:
