@@ -139,7 +139,7 @@ class PgUserKeyRepository:
                 )
                 .returning(User.discord_user_id)
             )
-            if result.rowcount == 0:
+            if result.scalar_one_or_none() is None:
                 await session.execute(
                     pg_insert(User).values(
                         discord_user_id=member.id,
