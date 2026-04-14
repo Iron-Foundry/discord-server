@@ -47,6 +47,10 @@ class UserKeyService(Service):
         """Set or clear the stats opt-out flag for a member."""
         await self._repo.set_stats_opt_out(member.id, opt_out)
 
+    async def post_ready(self) -> None:
+        """Sync all current guild members once the member cache is populated."""
+        await self.sync_all_members()
+
     async def sync_all_members(self) -> None:
         """Upsert a bare profile for every current guild member."""
         members = self._guild.members

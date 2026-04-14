@@ -212,7 +212,6 @@ async def load_user_key_service(
     repo = PgUserKeyRepository(session_factory=session_factory)
     service = UserKeyService(guild=guild, repo=repo)
     await service.initialize()
-    await service.sync_all_members()
     service.register_events(client)
 
     tree.add_command(make_userkey_command(service), guild=guild)
