@@ -1,3 +1,4 @@
+# DEPRECATED — MongoDB implementation. Kept for reference. Not imported in production.
 from __future__ import annotations
 
 from typing import Any

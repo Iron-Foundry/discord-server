@@ -1,3 +1,4 @@
+# DEPRECATED — MongoDB implementation. Kept for reference. Not imported in production.
 import asyncio
 from datetime import datetime
 

@@ -62,13 +62,15 @@ class DiscordClient(discord.Client):
             logger.exception(f"Could not fetch guild with ID {guild_id_str}")
 
     async def _init_services(self) -> None:
-        """Fetch mongo credentials once and load all services in parallel."""
-        mongo_uri = self.config.get_variable(ConfigVars.MONGO_URI)
-        db_name = self.config.get_variable(ConfigVars.MONGO_DB_NAME) or "foundry"
+        """Initialise the PG session factory and load all services in parallel."""
+        from core.db import init_db, get_session_factory
 
-        if not mongo_uri:
-            logger.error("MONGO_URI not set — no services will start")
+        database_url = self.config.get_variable(ConfigVars.DATABASE_URL)
+        if not database_url:
+            logger.error("DATABASE_URL not set — no services will start")
             return
+
+        await init_db(database_url)
 
         assert self._guild is not None
         services = await load_all_services(
@@ -76,8 +78,7 @@ class DiscordClient(discord.Client):
             tree=self.command_handler.tree,
             registry=self.help_registry,
             client=self,
-            mongo_uri=mongo_uri,
-            db_name=db_name,
+            session_factory=get_session_factory(),
         )
         (
             self.ticket_service,
@@ -155,6 +156,14 @@ class DiscordClient(discord.Client):
             task = asyncio.create_task(handler(*args, **kwargs))
             self._bg_tasks.add(task)
             task.add_done_callback(self._bg_tasks.discard)
+
+    @override
+    async def close(self) -> None:
+        """Shut down the client and release the PG connection pool."""
+        from core.db import close_db
+
+        await close_db()
+        await super().close()
 
     @property
     def current_guild(self) -> discord.Guild:
