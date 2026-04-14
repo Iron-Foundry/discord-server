@@ -96,7 +96,7 @@ class RankupTicket(TicketTypeConfig):
         return RankupModal(callback)
 
     def build_create_embed(self, record: TicketRecord) -> discord.Embed:
-        meta = record.metadata
+        meta = record.extra_metadata
         embed = discord.Embed(
             title=f"{self.emoji} Rank Up Application — #{record.ticket_id:04d}",
             color=self.color,

@@ -637,7 +637,7 @@ class PgTicketRepository:
 
 def _record_to_orm_values(record: TicketRecord) -> dict:
     """Convert a TicketRecord to a dict suitable for ORM insertion."""
-    meta = dict(record.metadata)
+    meta = dict(record.extra_metadata)
     meta["_creator"] = record.creator.model_dump(mode="json")
 
     return {
@@ -668,7 +668,7 @@ def _orm_to_record(row: OrmTicket) -> TicketRecord:
     """Reconstruct a TicketRecord from an ORM Ticket row."""
     from features.tickets.models.ticket import ReopenEvent
 
-    meta: dict = dict(row.metadata or {})
+    meta: dict = dict(row.extra_metadata or {})
     creator_data: dict | None = meta.pop("_creator", None)
 
     if creator_data:

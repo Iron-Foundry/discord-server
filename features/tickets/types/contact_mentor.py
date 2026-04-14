@@ -104,7 +104,7 @@ class ContactMentorTicket(TicketTypeConfig):
         return ContactMentorModal(callback)
 
     def build_create_embed(self, record: TicketRecord) -> discord.Embed:
-        meta = record.metadata
+        meta = record.extra_metadata
         embed = discord.Embed(
             title=f"{self.emoji} PVM Help — #{record.ticket_id:04d}",
             color=self.color,
