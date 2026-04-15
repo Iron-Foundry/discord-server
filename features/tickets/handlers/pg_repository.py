@@ -660,7 +660,7 @@ def _record_to_orm_values(record: TicketRecord) -> dict:
         "close_reason": record.close_reason,
         "reopen_history": [e.model_dump(mode="json") for e in record.reopen_history],
         "timeout_frozen": record.timeout_frozen,
-        "metadata": meta,
+        "extra_metadata": meta,
     }
 
 
