@@ -138,6 +138,7 @@ class PgUserKeyRepository:
                     discord_username=str(member),
                     guild_id=member.guild.id,
                     discord_roles=role_names,
+                    join_date=joined_at,
                     updated_at=now,
                 )
                 .returning(User.discord_user_id)
@@ -149,6 +150,7 @@ class PgUserKeyRepository:
                         discord_username=str(member),
                         guild_id=member.guild.id,
                         discord_roles=role_names,
+                        join_date=joined_at,
                         created_at=joined_at,
                         updated_at=now,
                     )

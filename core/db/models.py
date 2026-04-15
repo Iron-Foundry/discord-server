@@ -55,6 +55,7 @@ class User(Base):
     temp_vc_lock_status: Mapped[str | None] = mapped_column(Text)
     temp_vc_member_limit: Mapped[int | None] = mapped_column(Integer)
     temp_vc_bitrate: Mapped[int | None] = mapped_column(Integer)
+    join_date: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
