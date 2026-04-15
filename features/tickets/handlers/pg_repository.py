@@ -50,13 +50,17 @@ class PgTicketRepository:
     async def save_ticket(self, record: TicketRecord) -> None:
         """Upsert a ticket record."""
         row = _record_to_orm_values(record)
+        # set_ uses DB column names; extra_metadata maps to the 'metadata' column
+        _col_name = {"extra_metadata": "metadata"}
+        set_ = {
+            _col_name.get(k, k): v
+            for k, v in row.items()
+            if k != "ticket_id"
+        }
         stmt = (
             pg_insert(OrmTicket)
             .values(**row)
-            .on_conflict_do_update(
-                index_elements=["ticket_id"],
-                set_={k: v for k, v in row.items() if k != "ticket_id"},
-            )
+            .on_conflict_do_update(index_elements=["ticket_id"], set_=set_)
         )
         async with self._factory() as session:
             await session.execute(stmt)
