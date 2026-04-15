@@ -382,9 +382,7 @@ class TicketService(Service):
             await self.repo.update_ticket(
                 ticket_id,
                 status=TicketStatus.CLOSED.value,
-                closed_at=ticket.record.closed_at.isoformat()
-                if ticket.record.closed_at
-                else None,
+                closed_at=ticket.record.closed_at,
                 closed_by_id=closer.id,
                 close_reason=reason,
                 staff_note=note,
