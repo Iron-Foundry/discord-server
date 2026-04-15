@@ -8,7 +8,6 @@ from typing import Any, cast
 import discord
 from loguru import logger
 
-from features.tickets.handlers.archive_channel import ArchiveChannelTicketRepository
 from features.tickets.handlers.pg_repository import PgTicketRepository
 from features.tickets.models.stats import HandlerStats, LeaderboardEntry, SystemStats
 from features.tickets.models.ticket import (
@@ -91,11 +90,10 @@ class TicketService(Service):
         await self.repo.ensure_indexes()
 
     async def post_ready(self) -> None:
-        """Register the archive handler and recover open tickets.
+        """Recover open tickets.
 
         Must be called from on_ready, after the guild cache is fully populated.
         """
-        self.try_register_archive_handler()
         await self._recover_panel()
 
         records = await self.repo.get_open_tickets(self.guild.id)
@@ -357,7 +355,7 @@ class TicketService(Service):
                     not ticket.ticket_type.sensitive and ticket.transcript.entries
                 )
                 if has_transcript:
-                    from features.tickets.handlers.archive_channel import (
+                    from features.tickets.handlers.transcript_file import (
                         build_transcript_file,
                     )
 
@@ -466,7 +464,7 @@ class TicketService(Service):
             else:
                 prior_transcript = await self.repo.get_transcript(ticket_id)
                 if prior_transcript:
-                    from features.tickets.handlers.archive_channel import (
+                    from features.tickets.handlers.transcript_file import (
                         build_transcript_file,
                     )
 
@@ -899,30 +897,6 @@ class TicketService(Service):
             f"{new_type.display_name} by {changer}"
         )
         return True
-
-    def try_register_archive_handler(self) -> None:
-        """Register the archive channel handler if the channel is now resolvable.
-
-        Called after on_ready when the live guild cache has channels populated.
-        """
-        if "archive_channel" in self._transcript_handlers:
-            return
-        archive = self._get_archive_channel()
-        if archive:
-            self.register_handler(
-                "archive_channel", ArchiveChannelTicketRepository(archive)
-            )
-            logger.info(f"ArchiveChannelTicketRepository registered → #{archive.name}")
-
-    def _get_archive_channel(self) -> discord.TextChannel | None:
-        from core.config import ConfigInterface, ConfigVars
-
-        cfg = ConfigInterface()
-        channel_id_str = cfg.get_variable(ConfigVars.ARCHIVE_CHANNEL_ID)
-        if channel_id_str:
-            ch = self.guild.get_channel(int(channel_id_str))
-            return ch if isinstance(ch, discord.TextChannel) else None
-        return None
 
     async def _get_or_create_category(
         self, name: str | None

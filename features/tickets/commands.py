@@ -186,7 +186,7 @@ class TicketGroup(
         ticket_id: int,
         user: discord.Member | None = None,
     ) -> None:
-        from features.tickets.handlers.archive_channel import build_transcript_file
+        from features.tickets.handlers.transcript_file import build_transcript_file
 
         await interaction.response.defer(ephemeral=True, thinking=True)
 
