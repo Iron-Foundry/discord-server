@@ -5,13 +5,13 @@ from loguru import logger
 
 from core.service_base import Service
 from features.member.join_roles.models import JoinRoleConfig
-from features.member.join_roles.repository import MongoJoinRoleRepository
+from features.member.join_roles.pg_repository import PgJoinRoleRepository
 
 
 class JoinRoleService(Service):
     """Manages roles automatically assigned when a member joins the server."""
 
-    def __init__(self, guild: discord.Guild, repo: MongoJoinRoleRepository) -> None:
+    def __init__(self, guild: discord.Guild, repo: PgJoinRoleRepository) -> None:
         self._guild = guild
         self._repo = repo
         self._config: JoinRoleConfig | None = None

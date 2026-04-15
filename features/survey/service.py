@@ -9,7 +9,7 @@ from loguru import logger
 from core.common.ticket_types import TicketTypeId
 from core.service_base import Service
 from features.survey.models import ActiveSurvey, SurveyResponse, SurveyTemplate
-from features.survey.repository import MongoSurveyRepository
+from features.survey.pg_repository import PgSurveyRepository
 
 if TYPE_CHECKING:
     from features.tickets.ticket_service import TicketService
@@ -22,7 +22,7 @@ class SurveyService(Service):
         self,
         guild: discord.Guild,
         client: discord.Client,
-        repo: MongoSurveyRepository,
+        repo: PgSurveyRepository,
     ) -> None:
         self._guild = guild
         self._client = client

@@ -8,7 +8,7 @@ from loguru import logger
 
 from core.service_base import Service
 from features.member.roles.models import RolePanel, SelectableRoleConfig
-from features.member.roles.repository import MongoRolePanelRepository
+from features.member.roles.pg_repository import PgRolePanelRepository
 from features.member.roles.views.panel_view import (
     EphemeralRoleSelectView,
     RoleSelectView,
@@ -22,7 +22,7 @@ class RoleService(Service):
         self,
         guild: discord.Guild,
         client: discord.Client,
-        repo: MongoRolePanelRepository,
+        repo: PgRolePanelRepository,
     ) -> None:
         self._guild = guild
         self._client = client
@@ -155,7 +155,7 @@ class RoleService(Service):
             try:
                 msg = await channel.fetch_message(panel.message_id)
                 await msg.delete()
-            except discord.NotFound, discord.HTTPException:
+            except (discord.NotFound, discord.HTTPException):
                 pass
         await self._repo.delete_panel(panel_id)
         del self._panels[panel_id]

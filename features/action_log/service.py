@@ -14,7 +14,7 @@ from features.action_log.models import (
     LogCategory,
 )
 from features.action_log.registrar import EventRegistrar
-from features.action_log.repository import MongoActionLogRepository
+from features.action_log.pg_repository import PgActionLogRepository
 from features.action_log.throttle import MessageThrottle
 from core.service_base import Service
 
@@ -35,7 +35,7 @@ class ActionLogService(Service):
         self,
         guild: discord.Guild,
         client: DiscordClient,
-        repo: MongoActionLogRepository,
+        repo: PgActionLogRepository,
     ) -> None:
         self._guild = guild
         self._client = client

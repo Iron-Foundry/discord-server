@@ -9,7 +9,7 @@ from loguru import logger
 from core.common.ticket_types import TicketTypeId
 from core.service_base import Service
 from features.survey.models import SurveyResponse, SurveyTemplate
-from features.survey.repository import MongoSurveyRepository
+from features.survey.pg_repository import PgSurveyRepository
 from features.survey.views.summary_view import build_summary_embed
 from features.tickets.types.event_team_template import build_event_team_template
 from features.tickets.types.mentor_template import build_mentor_template
@@ -27,7 +27,7 @@ class ApplicationService(Service):
     staff must review and close the ticket themselves.
     """
 
-    def __init__(self, guild: discord.Guild, repo: MongoSurveyRepository) -> None:
+    def __init__(self, guild: discord.Guild, repo: PgSurveyRepository) -> None:
         self._guild = guild
         self._repo = repo
         self._ticket_service: TicketService | None = None

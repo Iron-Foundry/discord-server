@@ -6,7 +6,7 @@ import discord
 from loguru import logger
 
 from features.broadcast.models import BroadcastConfig
-from features.broadcast.repository import MongoBroadcastRepository
+from features.broadcast.pg_repository import PgBroadcastRepository
 from core.service_base import Service
 
 
@@ -22,7 +22,7 @@ class BroadcastResult:
 class BroadcastService(Service):
     """Sends DMs to all members of a configured role."""
 
-    def __init__(self, guild: discord.Guild, repo: MongoBroadcastRepository) -> None:
+    def __init__(self, guild: discord.Guild, repo: PgBroadcastRepository) -> None:
         self._guild = guild
         self._repo = repo
         self._config: BroadcastConfig | None = None
