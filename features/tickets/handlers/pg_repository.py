@@ -637,7 +637,7 @@ class PgTicketRepository:
 
 def _record_to_orm_values(record: TicketRecord) -> dict:
     """Convert a TicketRecord to a dict suitable for ORM insertion."""
-    meta = dict(record.extra_metadata)
+    meta = dict(record.metadata)
     meta["_creator"] = record.creator.model_dump(mode="json")
 
     return {

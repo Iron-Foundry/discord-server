@@ -136,6 +136,7 @@ class PgUserKeyRepository:
                 .where(User.discord_user_id == member.id)
                 .values(
                     discord_username=str(member),
+                    discord_avatar_url=str(member.display_avatar.url),
                     guild_id=member.guild.id,
                     discord_roles=role_names,
                     join_date=joined_at,
@@ -148,6 +149,7 @@ class PgUserKeyRepository:
                     pg_insert(User).values(
                         discord_user_id=member.id,
                         discord_username=str(member),
+                        discord_avatar_url=str(member.display_avatar.url),
                         guild_id=member.guild.id,
                         discord_roles=role_names,
                         join_date=joined_at,
