@@ -9,7 +9,7 @@ import discord
 from loguru import logger
 
 from features.tickets.handlers.archive_channel import ArchiveChannelTicketRepository
-from features.tickets.handlers.database import MongoTicketRepository
+from features.tickets.handlers.pg_repository import PgTicketRepository
 from features.tickets.models.stats import HandlerStats, LeaderboardEntry, SystemStats
 from features.tickets.models.ticket import (
     MemberSnapshot,
@@ -56,13 +56,13 @@ class TicketService(Service):
     - Manage the panel embed and select menu
     - Create, close, and reopen tickets
     - Enforce per-user limits and 24-hr inactivity timeouts
-    - Persist all state to MongoDB
+    - Persist all state to PostgreSQL
     - Recover open tickets from the DB on bot restart
     - Dispatch to pluggable transcript handlers
     """
 
     def __init__(
-        self, guild: discord.Guild, repo: MongoTicketRepository, client: discord.Client
+        self, guild: discord.Guild, repo: PgTicketRepository, client: discord.Client
     ) -> None:
         self.guild = guild
         self.repo = repo
@@ -74,7 +74,7 @@ class TicketService(Service):
         self._timeout_tasks: dict[int, asyncio.Task] = {}
         # name → (handler, enabled)
         self._transcript_handlers: dict[str, tuple[TranscriptHandler, bool]] = {
-            "mongodb": (cast(TranscriptHandler, repo), True),
+            "pg": (cast(TranscriptHandler, repo), True),
         }
         self._panel_channel: discord.TextChannel | None = None
         self._panel_message: discord.Message | None = None
@@ -502,7 +502,7 @@ class TicketService(Service):
                 reopen_history=[
                     e.model_dump(mode="json") for e in record.reopen_history
                 ],
-                last_message_at=now.isoformat(),
+                last_message_at=now,
             )
 
             # Post reopen embed
@@ -720,7 +720,7 @@ class TicketService(Service):
 
         now = datetime.now(UTC)
         ticket.record.last_message_at = now
-        await self.repo.update_ticket(ticket.ticket_id, last_message_at=now.isoformat())
+        await self.repo.update_ticket(ticket.ticket_id, last_message_at=now)
 
         # Track first staff response time and participation
         if isinstance(message.author, discord.Member) and any(
@@ -730,7 +730,7 @@ class TicketService(Service):
             updates: dict[str, object] = {}
             if ticket.record.first_staff_response_at is None:
                 ticket.record.first_staff_response_at = now
-                updates["first_staff_response_at"] = now.isoformat()
+                updates["first_staff_response_at"] = now
             if staff_id not in ticket.record.participants:
                 ticket.record.participants.append(staff_id)
                 updates["participants"] = ticket.record.participants
