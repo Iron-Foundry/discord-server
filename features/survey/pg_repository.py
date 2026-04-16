@@ -75,14 +75,32 @@ class PgSurveyRepository:
             row = result.scalar_one_or_none()
             if row is None:
                 return None
-            return _orm_to_template(row)
+            try:
+                return _orm_to_template(row)
+            except Exception as exc:
+                logger.error(
+                    "PgSurveyRepository: failed to parse template '{}': {}",
+                    template_id,
+                    exc,
+                )
+                return None
 
     async def list_templates(self, guild_id: int) -> list[SurveyTemplate]:
         """Return all templates (guild_id filter omitted — single-guild schema)."""
         async with self._factory() as session:
             result = await session.execute(select(OrmSurveyTemplate))
             rows = result.scalars().all()
-            return [_orm_to_template(row) for row in rows]
+        templates: list[SurveyTemplate] = []
+        for row in rows:
+            try:
+                templates.append(_orm_to_template(row))
+            except Exception as exc:
+                logger.warning(
+                    "PgSurveyRepository: skipping malformed template '{}': {}",
+                    row.template_id,
+                    exc,
+                )
+        return templates
 
     async def delete_template(self, guild_id: int, template_id: str) -> None:
         """Delete a template by ID."""
@@ -256,18 +274,35 @@ class PgSurveyRepository:
 
 
 def _orm_to_template(row: OrmSurveyTemplate) -> SurveyTemplate:
-    """Reconstruct a SurveyTemplate domain model from an ORM row."""
+    """Reconstruct a SurveyTemplate domain model from an ORM row.
+
+    Handles two storage formats:
+    - New (dict):  {"fields": [...], "guild_id": ..., "description": ..., "created_by_id": ...}
+    - Legacy (list): a raw list of field dicts stored directly in the questions column
+    """
     from datetime import UTC, datetime
 
-    questions: dict = row.questions or {}
+    raw = row.questions or {}
+    if isinstance(raw, list):
+        # Legacy format: the questions column held the fields list directly
+        fields_data = raw
+        guild_id = 0
+        description = None
+        created_by_id = 0
+    else:
+        fields_data = raw.get("fields", [])
+        guild_id = raw.get("guild_id", 0)
+        description = raw.get("description")
+        created_by_id = raw.get("created_by_id", 0)
+
     return SurveyTemplate.model_validate(
         {
             "template_id": row.template_id,
             "title": row.title,
             "created_at": row.created_at or datetime.now(UTC),
-            "fields": questions.get("fields", []),
-            "guild_id": questions.get("guild_id", 0),
-            "description": questions.get("description"),
-            "created_by_id": questions.get("created_by_id", 0),
+            "fields": fields_data,
+            "guild_id": guild_id,
+            "description": description,
+            "created_by_id": created_by_id,
         }
     )
