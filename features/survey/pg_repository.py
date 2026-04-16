@@ -79,26 +79,51 @@ class PgSurveyRepository:
                 return _orm_to_template(row)
             except Exception as exc:
                 logger.error(
-                    "PgSurveyRepository: failed to parse template '{}': {}",
+                    "PgSurveyRepository: malformed template '{}', using stub: {}",
                     template_id,
                     exc,
                 )
-                return None
+                from datetime import UTC, datetime
+
+                return SurveyTemplate(
+                    template_id=row.template_id,
+                    guild_id=0,
+                    title=row.title,
+                    description=None,
+                    fields=[],
+                    created_at=row.created_at or datetime.now(UTC),
+                    created_by_id=0,
+                )
 
     async def list_templates(self, guild_id: int) -> list[SurveyTemplate]:
         """Return all templates (guild_id filter omitted — single-guild schema)."""
         async with self._factory() as session:
             result = await session.execute(select(OrmSurveyTemplate))
             rows = result.scalars().all()
+        from datetime import UTC, datetime
+
         templates: list[SurveyTemplate] = []
         for row in rows:
             try:
                 templates.append(_orm_to_template(row))
             except Exception as exc:
                 logger.warning(
-                    "PgSurveyRepository: skipping malformed template '{}': {}",
+                    "PgSurveyRepository: malformed template '{}', using stub: {}",
                     row.template_id,
                     exc,
+                )
+                # Stub so the template still appears in autocomplete even when
+                # field data can't be parsed (e.g. legacy field type values).
+                templates.append(
+                    SurveyTemplate(
+                        template_id=row.template_id,
+                        guild_id=0,
+                        title=row.title,
+                        description=None,
+                        fields=[],
+                        created_at=row.created_at or datetime.now(UTC),
+                        created_by_id=0,
+                    )
                 )
         return templates
 
