@@ -41,6 +41,8 @@ class PgSurveyRepository:
             "guild_id": template.guild_id,
             "description": template.description,
             "created_by_id": template.created_by_id,
+            "visibility": template.visibility,
+            "category": template.category,
         }
         stmt = (
             pg_insert(OrmSurveyTemplate)
@@ -335,11 +337,15 @@ def _orm_to_template(row: OrmSurveyTemplate) -> SurveyTemplate:
         guild_id = 0
         description = None
         created_by_id = 0
+        visibility = None
+        category = "survey"
     else:
         fields_data = raw.get("fields", [])
         guild_id = raw.get("guild_id", 0)
         description = raw.get("description")
         created_by_id = raw.get("created_by_id", 0)
+        visibility = raw.get("visibility")
+        category = raw.get("category", "survey")
 
     parsed_fields: list[SurveyField] = []
     for i, fd in enumerate(fields_data):
@@ -364,4 +370,6 @@ def _orm_to_template(row: OrmSurveyTemplate) -> SurveyTemplate:
         guild_id=guild_id,
         description=description,
         created_by_id=created_by_id,
+        visibility=visibility,
+        category=category,
     )

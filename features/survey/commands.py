@@ -694,6 +694,78 @@ class TemplateSubgroup(app_commands.Group):
             ephemeral=True,
         )
 
+    # /survey template visibility
+    @app_commands.command(
+        name="visibility",
+        description="Set who can see this survey on the website",
+    )
+    @app_commands.describe(
+        name="Template to update",
+        level="Minimum role that can see it (Staff only = hidden from non-staff)",
+    )
+    @app_commands.choices(
+        level=[
+            app_commands.Choice(name="Staff only", value=""),
+            app_commands.Choice(name="Mentor", value="Mentor"),
+            app_commands.Choice(name="Event Team", value="Event Team"),
+            app_commands.Choice(name="Moderator", value="Moderator"),
+        ]
+    )
+    @app_commands.autocomplete(name=_template_autocomplete)
+    @is_senior_staff()
+    async def set_visibility(
+        self,
+        interaction: discord.Interaction,
+        name: str,
+        level: app_commands.Choice[str],
+    ) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        template = await self._service.get_template(name)
+        if not template:
+            await interaction.followup.send(
+                f"Template `{name}` not found.", ephemeral=True
+            )
+            return
+        visibility = level.value or None
+        updated = template.model_copy(update={"visibility": visibility})
+        await self._service.save_template(updated)
+        await interaction.followup.send(
+            f"Visibility for `{name}` set to **{level.name}**.", ephemeral=True
+        )
+
+    # /survey template category
+    @app_commands.command(
+        name="category",
+        description="Mark a template as a survey or an application",
+    )
+    @app_commands.describe(name="Template to update")
+    @app_commands.choices(
+        cat=[
+            app_commands.Choice(name="Survey", value="survey"),
+            app_commands.Choice(name="Application", value="application"),
+        ]
+    )
+    @app_commands.autocomplete(name=_template_autocomplete)
+    @is_senior_staff()
+    async def set_category(
+        self,
+        interaction: discord.Interaction,
+        name: str,
+        cat: app_commands.Choice[str],
+    ) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        template = await self._service.get_template(name)
+        if not template:
+            await interaction.followup.send(
+                f"Template `{name}` not found.", ephemeral=True
+            )
+            return
+        updated = template.model_copy(update={"category": cat.value})
+        await self._service.save_template(updated)
+        await interaction.followup.send(
+            f"Category for `{name}` set to **{cat.name}**.", ephemeral=True
+        )
+
     async def on_error(
         self, interaction: discord.Interaction, error: app_commands.AppCommandError
     ) -> None:

@@ -24,6 +24,8 @@ class SurveyTemplate(BaseModel):
     fields: list[SurveyField]
     created_at: datetime
     created_by_id: int
+    visibility: str | None = None  # Discord role name; None = staff only
+    category: Literal["survey", "application"] = "survey"
 
 
 class ActiveSurvey(BaseModel):
