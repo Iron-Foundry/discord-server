@@ -241,15 +241,7 @@ class PgSurveyRepository:
             row = result.scalar_one_or_none()
             if row is None:
                 return None
-            try:
-                return SurveyResponse.model_validate(row.responses)
-            except Exception as exc:
-                logger.error(
-                    "PgSurveyRepository: failed to parse response for ticket {}: {}",
-                    ticket_id,
-                    exc,
-                )
-                return None
+            return _orm_to_response(row)
 
     async def get_responses_for_template(
         self, guild_id: int, template_id: str
@@ -262,17 +254,12 @@ class PgSurveyRepository:
                 )
             )
             rows = result.scalars().all()
-            responses: list[SurveyResponse] = []
-            for row in rows:
-                try:
-                    responses.append(SurveyResponse.model_validate(row.responses))
-                except Exception as exc:
-                    logger.warning(
-                        "PgSurveyRepository: skipping malformed response for ticket {}: {}",
-                        row.ticket_id,
-                        exc,
-                    )
-            return responses
+        responses: list[SurveyResponse] = []
+        for row in rows:
+            response = _orm_to_response(row)
+            if response is not None:
+                responses.append(response)
+        return responses
 
     async def delete_response(self, ticket_id: int) -> None:
         """Delete a response by ticket ID."""
@@ -296,6 +283,40 @@ class PgSurveyRepository:
             )
             await session.commit()
             return result.rowcount
+
+
+def _orm_to_response(row: OrmSurveyResponse) -> SurveyResponse | None:
+    """Reconstruct a SurveyResponse from an ORM row.
+
+    Handles two storage formats:
+    - New (full model dump): has ``ticket_id``, ``answers``, etc. at top level.
+    - Legacy (flat answers): just ``{field_id: value, ...}`` with no metadata.
+      Metadata is reconstructed from the ORM row's dedicated columns.
+    """
+    from datetime import UTC, datetime
+
+    data: dict = row.responses or {}
+    # Detect legacy format: missing the required model keys
+    if "ticket_id" not in data:
+        data = {
+            "ticket_id": row.ticket_id,
+            "template_id": row.template_id,
+            "respondent_id": 0,
+            "guild_id": 0,
+            "answers": data,
+            "completed": True,
+            "started_at": row.submitted_at or datetime.now(UTC),
+            "completed_at": row.submitted_at,
+        }
+    try:
+        return SurveyResponse.model_validate(data)
+    except Exception as exc:
+        logger.error(
+            "PgSurveyRepository: failed to parse response for ticket {}: {}",
+            row.ticket_id,
+            exc,
+        )
+        return None
 
 
 def _orm_to_template(row: OrmSurveyTemplate) -> SurveyTemplate:
@@ -323,6 +344,9 @@ def _orm_to_template(row: OrmSurveyTemplate) -> SurveyTemplate:
     parsed_fields: list[SurveyField] = []
     for i, fd in enumerate(fields_data):
         try:
+            # Legacy format used "text" instead of "label"
+            if "label" not in fd and "text" in fd:
+                fd = {**fd, "label": fd["text"]}
             parsed_fields.append(SurveyField.model_validate(fd))
         except Exception as exc:
             logger.warning(
