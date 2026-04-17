@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from core.db.models import SurveyActive
 from core.db.models import SurveyResponse as OrmSurveyResponse
 from core.db.models import SurveyTemplate as OrmSurveyTemplate
-from features.survey.models import ActiveSurvey, SurveyResponse, SurveyTemplate
+from features.survey.models import ActiveSurvey, SurveyField, SurveyResponse, SurveyTemplate
 
 _ACTIVE_ID = 1
 
@@ -320,14 +320,24 @@ def _orm_to_template(row: OrmSurveyTemplate) -> SurveyTemplate:
         description = raw.get("description")
         created_by_id = raw.get("created_by_id", 0)
 
-    return SurveyTemplate.model_validate(
-        {
-            "template_id": row.template_id,
-            "title": row.title,
-            "created_at": row.created_at or datetime.now(UTC),
-            "fields": fields_data,
-            "guild_id": guild_id,
-            "description": description,
-            "created_by_id": created_by_id,
-        }
+    parsed_fields: list[SurveyField] = []
+    for i, fd in enumerate(fields_data):
+        try:
+            parsed_fields.append(SurveyField.model_validate(fd))
+        except Exception as exc:
+            logger.warning(
+                "PgSurveyRepository: skipping field #{} in template '{}': {}",
+                i,
+                row.template_id,
+                exc,
+            )
+
+    return SurveyTemplate(
+        template_id=row.template_id,
+        title=row.title,
+        created_at=row.created_at or datetime.now(UTC),
+        fields=parsed_fields,
+        guild_id=guild_id,
+        description=description,
+        created_by_id=created_by_id,
     )
