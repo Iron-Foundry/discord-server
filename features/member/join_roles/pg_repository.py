@@ -61,6 +61,4 @@ class PgJoinRoleRepository:
         async with self._factory() as session:
             await session.execute(stmt)
             await session.commit()
-        logger.debug(
-            "PgJoinRoleRepository: saved config for guild {}", config.guild_id
-        )
+        logger.debug("PgJoinRoleRepository: saved config for guild {}", config.guild_id)

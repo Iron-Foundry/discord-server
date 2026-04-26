@@ -23,7 +23,9 @@ class User(Base):
     discord_user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     discord_username: Mapped[str] = mapped_column(Text, nullable=False)
     discord_avatar_url: Mapped[str | None] = mapped_column(Text)
-    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    guild_id: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, server_default="0"
+    )
     rsn: Mapped[str | None] = mapped_column(Text, unique=True)
     clan_rank: Mapped[str | None] = mapped_column(Text)
     discord_roles: Mapped[list] = mapped_column(
@@ -57,18 +59,26 @@ class User(Base):
     temp_vc_member_limit: Mapped[int | None] = mapped_column(Integer)
     temp_vc_bitrate: Mapped[int | None] = mapped_column(Integer)
     join_date: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )
 
 
 class Ticket(Base):
     __tablename__ = "tickets"
 
-    ticket_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ticket_id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
     guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     ticket_type: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="open")
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )
     closed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
     last_message_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
     channel_id: Mapped[int | None] = mapped_column(BigInteger)
@@ -93,7 +103,9 @@ class Ticket(Base):
     timeout_frozen: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
-    extra_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}", name="metadata")
+    extra_metadata: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default="{}", name="metadata"
+    )
 
 
 class Transcript(Base):
@@ -101,33 +113,6 @@ class Transcript(Base):
 
     ticket_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     entries: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
-
-
-class SurveyTemplate(Base):
-    __tablename__ = "survey_templates"
-
-    template_id: Mapped[str] = mapped_column(Text, primary_key=True)
-    title: Mapped[str] = mapped_column(Text, nullable=False)
-    questions: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
-    created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
-
-
-class SurveyActive(Base):
-    __tablename__ = "survey_active"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, server_default="1")
-    template_id: Mapped[str] = mapped_column(Text, nullable=False)
-    ticket_id: Mapped[int | None] = mapped_column(Integer)
-    started_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
-
-
-class SurveyResponse(Base):
-    __tablename__ = "survey_responses"
-
-    ticket_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    template_id: Mapped[str] = mapped_column(Text, nullable=False)
-    responses: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
-    submitted_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
 
 
 class Config(Base):
@@ -149,5 +134,9 @@ class RolePanel(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     max_selectable: Mapped[int | None] = mapped_column(Integer)
     roles: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )

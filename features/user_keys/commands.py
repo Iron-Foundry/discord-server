@@ -46,8 +46,7 @@ def make_userkey_command(service: UserKeyService) -> app_commands.Command:  # ty
             user_key = await service.get_key(interaction.user)
             if user_key is None:
                 await interaction.response.send_message(
-                    "You don't have a key yet. "
-                    "Use `/userkey new` to generate one.",
+                    "You don't have a key yet. Use `/userkey new` to generate one.",
                     ephemeral=True,
                 )
                 return

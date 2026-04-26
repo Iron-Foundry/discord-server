@@ -5,8 +5,6 @@ from typing import TYPE_CHECKING
 from .general import GeneralTicket
 from .rankup import RankupTicket, RankupModal
 from .join_cc import JoinCCTicket
-from .apply_staff import ApplyStaffTicket
-from .apply_mentor import ApplyMentorTicket
 from .sensitive import SensitiveTicket
 from .contact_mentor import ContactMentorTicket, ContactMentorModal
 
@@ -18,8 +16,6 @@ __all__ = [
     "RankupTicket",
     "RankupModal",
     "JoinCCTicket",
-    "ApplyStaffTicket",
-    "ApplyMentorTicket",
     "SensitiveTicket",
     "ContactMentorTicket",
     "ContactMentorModal",
@@ -33,12 +29,9 @@ def register_all_types(service: "TicketService") -> None:
     Role IDs are read from environment variables:
 
       STAFF_ROLE_ID        — Handles General, Rankup, Join CC, Contact Mentor
-      SENIOR_STAFF_ROLE_ID — Handles Apply to Staff and Sensitive tickets
+      SENIOR_STAFF_ROLE_ID — Handles Sensitive tickets
       OWNER_ROLE_ID        — Handles Sensitive tickets
       MENTOR_ROLE_ID       — Handles Contact Mentor tickets
-
-    Note: ApplyStaffTicket and ApplyMentorTicket are registered separately
-    by ApplicationService.register_ticket_types() after it is initialised.
     """
     from core.config import ConfigInterface, ConfigVars
 

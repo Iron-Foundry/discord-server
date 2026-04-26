@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import base64
 from datetime import datetime
 from typing import Any
@@ -41,7 +40,7 @@ class PgTicketRepository:
             result = await session.execute(
                 text("SELECT nextval('tickets_ticket_id_seq')")
             )
-            return result.scalar()
+            return int(result.scalar_one())
 
     # -------------------------------------------------------------------------
     # Ticket records
@@ -52,11 +51,7 @@ class PgTicketRepository:
         row = _record_to_orm_values(record)
         # set_ uses DB column names; extra_metadata maps to the 'metadata' column
         _col_name = {"extra_metadata": "metadata"}
-        set_ = {
-            _col_name.get(k, k): v
-            for k, v in row.items()
-            if k != "ticket_id"
-        }
+        set_ = {_col_name.get(k, k): v for k, v in row.items() if k != "ticket_id"}
         stmt = (
             pg_insert(OrmTicket)
             .values(**row)
@@ -93,7 +88,9 @@ class PgTicketRepository:
                 return _orm_to_record(row)
             except Exception as exc:
                 logger.error(
-                    "PgTicketRepository: failed to hydrate ticket #{}: {}", ticket_id, exc
+                    "PgTicketRepository: failed to hydrate ticket #{}: {}",
+                    ticket_id,
+                    exc,
                 )
                 return None
 
@@ -361,7 +358,7 @@ class PgTicketRepository:
 
         participated_where = [
             OrmTicket.guild_id == guild_id,
-            OrmTicket.participants.any(staff_id),
+            OrmTicket.participants.contains([staff_id]),
         ]
         if since is not None:
             participated_where.append(OrmTicket.created_at >= since)
@@ -374,40 +371,38 @@ class PgTicketRepository:
         )
 
         async with self._factory() as session:
-            tickets_participated, agg_result, breakdown_result = await asyncio.gather(
-                session.execute(
-                    select(func.count()).select_from(OrmTicket).where(*participated_where)
-                ),
-                session.execute(
-                    select(
-                        func.count().label("tickets_closed"),
-                        func.avg(
-                            case(
-                                (
-                                    OrmTicket.closed_at.is_not(None)
-                                    & OrmTicket.created_at.is_not(None),
-                                    resolution_secs,
-                                ),
-                                else_=None,
-                            )
-                        ).label("avg_resolution_seconds"),
-                        func.avg(
-                            case(
-                                (
-                                    OrmTicket.first_staff_response_at.is_not(None)
-                                    & OrmTicket.created_at.is_not(None),
-                                    response_secs,
-                                ),
-                                else_=None,
-                            )
-                        ).label("avg_response_seconds"),
-                    ).where(*closed_where)
-                ),
-                session.execute(
-                    select(OrmTicket.ticket_type, func.count().label("cnt"))
-                    .where(*closed_where)
-                    .group_by(OrmTicket.ticket_type)
-                ),
+            tickets_participated = await session.execute(
+                select(func.count()).select_from(OrmTicket).where(*participated_where)
+            )
+            agg_result = await session.execute(
+                select(
+                    func.count().label("tickets_closed"),
+                    func.avg(
+                        case(
+                            (
+                                OrmTicket.closed_at.is_not(None)
+                                & OrmTicket.created_at.is_not(None),
+                                resolution_secs,
+                            ),
+                            else_=None,
+                        )
+                    ).label("avg_resolution_seconds"),
+                    func.avg(
+                        case(
+                            (
+                                OrmTicket.first_staff_response_at.is_not(None)
+                                & OrmTicket.created_at.is_not(None),
+                                response_secs,
+                            ),
+                            else_=None,
+                        )
+                    ).label("avg_response_seconds"),
+                ).where(*closed_where)
+            )
+            breakdown_result = await session.execute(
+                select(OrmTicket.ticket_type, func.count().label("cnt"))
+                .where(*closed_where)
+                .group_by(OrmTicket.ticket_type)
             )
 
         participated_count = tickets_participated.scalar() or 0
@@ -569,56 +564,52 @@ class PgTicketRepository:
         )
 
         async with self._factory() as session:
-            currently_open_res, total_opened_res, closed_agg_res, breakdown_res = (
-                await asyncio.gather(
-                    session.execute(
-                        select(func.count()).select_from(OrmTicket).where(
-                            OrmTicket.guild_id == guild_id,
-                            OrmTicket.status == TicketStatus.OPEN.value,
-                        )
-                    ),
-                    session.execute(
-                        select(func.count()).select_from(OrmTicket).where(*where_all)
-                    ),
-                    session.execute(
-                        select(
-                            func.count().label("total_closed"),
-                            func.avg(
-                                case(
-                                    (
-                                        OrmTicket.closed_at.is_not(None)
-                                        & OrmTicket.created_at.is_not(None),
-                                        resolution_secs,
-                                    ),
-                                    else_=None,
-                                )
-                            ).label("avg_resolution_seconds"),
-                            func.avg(
-                                case(
-                                    (
-                                        OrmTicket.first_staff_response_at.is_not(None)
-                                        & OrmTicket.created_at.is_not(None),
-                                        response_secs,
-                                    ),
-                                    else_=None,
-                                )
-                            ).label("avg_response_seconds"),
-                        ).where(*where_closed)
-                    ),
-                    session.execute(
-                        select(OrmTicket.ticket_type, func.count().label("cnt"))
-                        .where(*where_all)
-                        .group_by(OrmTicket.ticket_type)
-                    ),
+            currently_open_res = await session.execute(
+                select(func.count())
+                .select_from(OrmTicket)
+                .where(
+                    OrmTicket.guild_id == guild_id,
+                    OrmTicket.status == TicketStatus.OPEN.value,
                 )
+            )
+            total_opened_res = await session.execute(
+                select(func.count()).select_from(OrmTicket).where(*where_all)
+            )
+            closed_agg_res = await session.execute(
+                select(
+                    func.count().label("total_closed"),
+                    func.avg(
+                        case(
+                            (
+                                OrmTicket.closed_at.is_not(None)
+                                & OrmTicket.created_at.is_not(None),
+                                resolution_secs,
+                            ),
+                            else_=None,
+                        )
+                    ).label("avg_resolution_seconds"),
+                    func.avg(
+                        case(
+                            (
+                                OrmTicket.first_staff_response_at.is_not(None)
+                                & OrmTicket.created_at.is_not(None),
+                                response_secs,
+                            ),
+                            else_=None,
+                        )
+                    ).label("avg_response_seconds"),
+                ).where(*where_closed)
+            )
+            breakdown_res = await session.execute(
+                select(OrmTicket.ticket_type, func.count().label("cnt"))
+                .where(*where_all)
+                .group_by(OrmTicket.ticket_type)
             )
 
         currently_open = currently_open_res.scalar() or 0
         total_opened = total_opened_res.scalar() or 0
         closed_agg = closed_agg_res.one()
-        type_breakdown = {
-            row.ticket_type: row.cnt for row in breakdown_res.all()
-        }
+        type_breakdown = {row.ticket_type: row.cnt for row in breakdown_res.all()}
 
         return SystemStats(
             total_opened=total_opened,
@@ -685,9 +676,7 @@ def _orm_to_record(row: OrmTicket) -> TicketRecord:
             avatar_url="",
         )
 
-    reopen_history = [
-        ReopenEvent.model_validate(e) for e in (row.reopen_history or [])
-    ]
+    reopen_history = [ReopenEvent.model_validate(e) for e in (row.reopen_history or [])]
 
     return TicketRecord(
         ticket_id=row.ticket_id,

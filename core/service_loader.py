@@ -3,10 +3,8 @@
 Loading order:
   1. TicketService           — must load first (other services wire to it)
   2. All independent services — loaded in parallel via asyncio.gather()
-  3. Ticket type wiring       — survey and application register their ticket types
-  4. Session restoration      — re-attach in-progress survey/application flows
-  5. DMTicketService          — depends on TicketService, loaded after wiring
-  6. Help command             — registered last so all services have added their entries
+  3. DMTicketService          — depends on TicketService, loaded after
+  4. Help command             — registered last so all services have added their entries
 """
 
 from __future__ import annotations
@@ -25,11 +23,9 @@ if TYPE_CHECKING:
     from features.action_log.service import ActionLogService
     from features.broadcast.service import BroadcastService
     from core.discord_client import DiscordClient
-    from features.tickets.application_service import ApplicationService
     from features.tickets.dm_service import DMTicketService
     from features.member.join_roles.service import JoinRoleService
     from features.member.roles.service import RoleService
-    from features.survey.service import SurveyService
     from features.tickets.ticket_service import TicketService
     from features.user_keys.service import UserKeyService
 
@@ -160,43 +156,6 @@ async def load_broadcast_service(
     return service
 
 
-async def load_survey_service(
-    guild: discord.Guild,
-    tree: app_commands.CommandTree,
-    registry: HelpRegistry,
-    session_factory: async_sessionmaker[AsyncSession],
-    client: DiscordClient,
-) -> SurveyService:
-    """Initialise the survey service and register its slash commands."""
-    from features.survey.commands import SurveyGroup
-    from features.survey.commands import register_help as register_survey_help
-    from features.survey.pg_repository import PgSurveyRepository
-    from features.survey.service import SurveyService
-
-    repo = PgSurveyRepository(session_factory=session_factory)
-    service = SurveyService(guild=guild, client=client, repo=repo)
-    await service.initialize()
-
-    register_survey_help(registry)
-    tree.add_command(SurveyGroup(service=service), guild=guild)
-    logger.info("Survey service initialised and commands registered")
-    return service
-
-
-async def load_application_service(
-    guild: discord.Guild,
-    session_factory: async_sessionmaker[AsyncSession],
-) -> "ApplicationService":
-    """Initialise the application service (staff & mentor step-through flows)."""
-    from features.tickets.application_service import ApplicationService
-    from features.survey.pg_repository import PgSurveyRepository
-
-    repo = PgSurveyRepository(session_factory=session_factory)
-    service = ApplicationService(guild=guild, repo=repo)
-    await service.initialize()
-    return service
-
-
 async def load_user_key_service(
     guild: discord.Guild,
     tree: app_commands.CommandTree,
@@ -262,19 +221,12 @@ async def load_all_services(
     JoinRoleService,
     DMTicketService,
     "UserKeyService",
-    SurveyService,
-    "ApplicationService",
 ]:
     """Load all services, then register the help command.
 
     Independent services are loaded in parallel.  :class:`DMTicketService`
     is loaded after :class:`TicketService` because it depends on it.
-    :class:`SurveyService` and :class:`ApplicationService` are wired to
-    :class:`TicketService` after both are loaded so their ticket types can
-    be registered.
     """
-    from core.config import ConfigInterface, ConfigVars
-
     # ── 1 & 2. Ticket infrastructure + independent feature services (parallel) ─
     _results = await asyncio.gather(
         load_ticket_service(guild, tree, registry, session_factory, client),
@@ -283,8 +235,6 @@ async def load_all_services(
         load_broadcast_service(guild, tree, registry, session_factory),
         load_join_role_service(guild, tree, registry, session_factory, client),
         load_user_key_service(guild, tree, session_factory, client),
-        load_survey_service(guild, tree, registry, session_factory, client),
-        load_application_service(guild, session_factory),
     )
     ticket = cast("TicketService", _results[0])
     role = cast("RoleService", _results[1])
@@ -292,27 +242,6 @@ async def load_all_services(
     broadcast = cast("BroadcastService", _results[3])
     join_role = cast("JoinRoleService", _results[4])
     user_keys = cast("UserKeyService", _results[5])
-    survey = cast("SurveyService", _results[6])
-    application = cast("ApplicationService", _results[7])
-
-    cfg = ConfigInterface()
-
-    def _role_id(var: ConfigVars) -> int:
-        val = cfg.get_variable(var)
-        return int(val) if val else 0
-
-    # ── 3. Ticket type wiring ─────────────────────────────────────────────────
-    senior_staff_id = _role_id(ConfigVars.SENIOR_STAFF_ROLE_ID)
-    survey.set_ticket_service(ticket, senior_staff_id)
-    application.register_ticket_types(
-        ticket_service=ticket,
-        senior_staff_role_id=senior_staff_id,
-        staff_role_id=_role_id(ConfigVars.STAFF_ROLE_ID),
-    )
-
-    # ── 4. Session restoration ────────────────────────────────────────────────
-    await survey.restore_sessions()
-    await application.restore_sessions()
 
     dm_ticket = await load_dm_ticket_service(guild, ticket)
 
@@ -325,6 +254,4 @@ async def load_all_services(
         join_role,
         dm_ticket,
         user_keys,
-        survey,
-        application,
     )

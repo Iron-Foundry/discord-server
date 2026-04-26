@@ -16,11 +16,9 @@ from core.service_loader import load_all_services
 if TYPE_CHECKING:
     from features.action_log.service import ActionLogService
     from features.broadcast.service import BroadcastService
-    from features.tickets.application_service import ApplicationService
     from features.tickets.dm_service import DMTicketService
     from features.member.join_roles.service import JoinRoleService
     from features.member.roles.service import RoleService
-    from features.survey.service import SurveyService
     from features.tickets.ticket_service import TicketService
     from features.user_keys.service import UserKeyService
 
@@ -46,8 +44,6 @@ class DiscordClient(discord.Client):
         self.join_role_service: JoinRoleService | None = None
         self.dm_ticket_service: DMTicketService | None = None
         self.user_key_service: UserKeyService | None = None
-        self.survey_service: SurveyService | None = None
-        self.application_service: ApplicationService | None = None
 
     async def _resolve_guild(self) -> None:
         """Look up the configured guild and bind it to the command handler."""
@@ -88,8 +84,6 @@ class DiscordClient(discord.Client):
             self.join_role_service,
             self.dm_ticket_service,
             self.user_key_service,
-            self.survey_service,
-            self.application_service,
         ) = services
         self.service_handler.register(*services)
         self._services_loaded = True

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import discord
 from loguru import logger
@@ -98,7 +98,9 @@ class UserKeyService(Service):
                 return
             await self.unregister_member(member)
 
-        async def on_member_update(before: discord.Member, after: discord.Member) -> None:
+        async def on_member_update(
+            before: discord.Member, after: discord.Member
+        ) -> None:
             if after.guild.id != self._guild.id or after.bot:
                 return
             if before.roles != after.roles:
@@ -115,7 +117,9 @@ class UserKeyService(Service):
             discord_username=str(member),
             guild_id=self._guild.id,
             guild_name=self._guild.name,
-            key=xp.generate_xkcdpassword(_WORDLIST, numwords=5, delimiter="-"),
+            key=cast(
+                str, xp.generate_xkcdpassword(_WORDLIST, numwords=5, delimiter="-")
+            ),
         )
         await self._repo.save(user_key)
         await self._repo.upsert_user_profile(user_key)
