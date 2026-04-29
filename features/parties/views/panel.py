@@ -387,7 +387,7 @@ class PartyPanelView(discord.ui.View):
         super().__init__(timeout=None)
         self.service = service
 
-        total_pages = max(1, math.ceil(len(parties) / PAGE_SIZE))
+        total_pages = 1 + len(parties)  # page 0 = overview, pages 1..N = detail
         page = max(0, min(page, total_pages - 1))
 
         # Row 0: actions
