@@ -154,7 +154,6 @@ class PartyDB(Base):
         "PartyMemberDB",
         back_populates="party",
         cascade="all, delete-orphan",
-        order_by="PartyMemberDB.joined_at",
     )
 
 

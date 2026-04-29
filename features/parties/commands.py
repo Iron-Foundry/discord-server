@@ -34,7 +34,19 @@ class PartyGroup(app_commands.Group, name="party", description="Party panel mana
     ) -> None:
         """Post the party panel in the specified channel."""
         await interaction.response.defer(ephemeral=True)
-        await self._service.setup_panel(channel)
+        try:
+            await self._service.setup_panel(channel)
+        except Exception as exc:
+            logger.exception(
+                "PartyCommands: setup_panel failed for {} in #{}: {}",
+                interaction.user,
+                channel.name,
+                exc,
+            )
+            await interaction.followup.send(
+                f"Failed to post panel: `{exc}`", ephemeral=True
+            )
+            return
         await interaction.followup.send(
             f"Party panel posted in {channel.mention}.", ephemeral=True
         )
