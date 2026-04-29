@@ -1,4 +1,4 @@
-"""Party slash commands — staff-only panel setup."""
+"""Party slash commands - staff-only panel setup."""
 
 from __future__ import annotations
 

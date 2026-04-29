@@ -37,7 +37,7 @@ def _build_overview_embed(
     guild: discord.Guild,
 ) -> discord.Embed:
     embed = discord.Embed(
-        title="⚔️ Iron Foundry — Parties",
+        title="⚔️ Iron Foundry - Parties",
         color=discord.Color.gold(),
     )
 
@@ -52,7 +52,7 @@ def _build_overview_embed(
 
     if not parties:
         nl = "\n\n" if embed.description else ""
-        embed.description += f"{nl}No active parties — create one to get started!"
+        embed.description += f"{nl}No active parties - create one to get started!"
     else:
         lines: list[str] = []
         for i, party in enumerate(parties, 1):
@@ -68,7 +68,7 @@ def _build_overview_embed(
                 )
                 sched = f" · <t:{int(aware.timestamp())}:R>"
             lines.append(
-                f"`{i}` **{party.activity}**{suffix} — {leader} — {spots}{sched}"
+                f"`{i}` **{party.activity}**{suffix} - {leader} - {spots}{sched}"
             )
         pw = "party" if len(parties) == 1 else "parties"
         embed.add_field(
@@ -116,7 +116,7 @@ def _build_detail_embed(
         member_lines.append(name)
     embed.add_field(
         name="Members",
-        value="\n".join(member_lines) or "—",
+        value="\n".join(member_lines) or "-",
         inline=True,
     )
 
@@ -454,13 +454,13 @@ class _EphemeralBrowserView(discord.ui.View):
 # ── Main panel view ───────────────────────────────────────────────────────────
 
 class PartyPanelView(discord.ui.View):
-    """Persistent party panel view — always shows the overview page."""
+    """Persistent party panel view - always shows the overview page."""
 
     def __init__(
         self,
         service: PartyService,
         parties: list[PartyDB],
-        ping_roles: list[dict],  # noqa: ARG002 — kept for call-site compat
+        ping_roles: list[dict],  # noqa: ARG002 - kept for call-site compat
         page: int,  # noqa: ARG002
         site_url: str,
     ) -> None:

@@ -1,4 +1,4 @@
-"""Party service — manages the panel and coordinates party operations."""
+"""Party service - manages the panel and coordinates party operations."""
 
 from __future__ import annotations
 
@@ -10,11 +10,7 @@ from loguru import logger
 
 from core.service_base import Service
 from features.parties.pg_repository import PgPartyRepository
-from features.parties.views.panel import (
-    PartyPanelView,
-    active_ping_content,
-    build_panel_embed,
-)
+from features.parties.views.panel import PartyPanelView, build_panel_embed
 
 SITE_URL = (
     os.getenv("FRONTEND_URL", "https://ironfoundry.cc")
@@ -54,7 +50,7 @@ class PartyService(Service):
     # ── Service lifecycle ─────────────────────────────────────────────────
 
     async def initialize(self) -> None:
-        """No-op — panel recovery requires the live guild cache."""
+        """No-op - panel recovery requires the live guild cache."""
 
     async def post_ready(self) -> None:
         """Recover the panel and start the periodic refresh task."""
@@ -69,7 +65,7 @@ class PartyService(Service):
             try:
                 await self.refresh_panel()
             except Exception as exc:
-                logger.warning("PartyService: refresh error — {}", exc)
+                logger.warning("PartyService: refresh error - {}", exc)
 
     # ── Panel management ──────────────────────────────────────────────────
 
@@ -84,15 +80,9 @@ class PartyService(Service):
         parties, ping_roles = await self._fetch_state()
         embed, _, _ = build_panel_embed(parties, ping_roles, 0, self._guild)
         view = PartyPanelView(self, parties, ping_roles, 0, SITE_URL)
-        content = active_ping_content(parties) or None
 
         self._panel_channel = channel
-        self._panel_message = await channel.send(
-            content=content,
-            embed=embed,
-            view=view,
-            allowed_mentions=_ALLOWED_MENTIONS,
-        )
+        self._panel_message = await channel.send(embed=embed, view=view)
         await self._repo.save_panel_config(
             self._guild.id, channel.id, self._panel_message.id
         )
@@ -109,17 +99,11 @@ class PartyService(Service):
         parties, ping_roles = await self._fetch_state()
         embed, _, _ = build_panel_embed(parties, ping_roles, 0, self._guild)
         view = PartyPanelView(self, parties, ping_roles, 0, SITE_URL)
-        content = active_ping_content(parties) or None
         try:
-            await self._panel_message.edit(
-                content=content,
-                embed=embed,
-                view=view,
-                allowed_mentions=_ALLOWED_MENTIONS,
-            )
+            await self._panel_message.edit(embed=embed, view=view)
         except discord.NotFound:
             logger.warning(
-                "PartyService: panel message deleted — recreating in #{}",
+                "PartyService: panel message deleted - recreating in #{}",
                 self._panel_channel.name if self._panel_channel else "?",
             )
             channel = self._panel_channel
@@ -148,7 +132,7 @@ class PartyService(Service):
             )
         except discord.NotFound:
             logger.warning(
-                "PartyService: panel message {} gone — recreating in #{}",
+                "PartyService: panel message {} gone - recreating in #{}",
                 message_id,
                 channel.name,
             )
