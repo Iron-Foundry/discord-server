@@ -69,11 +69,17 @@ class PartyService(Service):
 
     # ── Panel management ──────────────────────────────────────────────────
 
+    async def _fetch_state(self) -> tuple[list, list[dict]]:
+        """Return (parties, ping_roles) for building the panel."""
+        parties = await self._repo.get_active_parties()
+        ping_roles = await self._repo.get_ping_roles()
+        return parties, ping_roles
+
     async def setup_panel(self, channel: discord.TextChannel) -> None:
         """Post a fresh panel in *channel* and persist the config."""
-        parties = await self._repo.get_active_parties()
-        embed, page, _ = build_panel_embed(parties, 0, self._guild)
-        view = PartyPanelView(self, parties, page, SITE_URL)
+        parties, ping_roles = await self._fetch_state()
+        embed, page, _ = build_panel_embed(parties, ping_roles, 0, self._guild)
+        view = PartyPanelView(self, parties, ping_roles, page, SITE_URL)
 
         self._panel_channel = channel
         self._current_page = 0
@@ -91,19 +97,25 @@ class PartyService(Service):
         """Edit the panel message to reflect current party state."""
         if not self._panel_message:
             return
-        parties = await self._repo.get_active_parties()
+        parties, ping_roles = await self._fetch_state()
         embed, page, _ = build_panel_embed(
-            parties, self._current_page, self._guild
+            parties, ping_roles, self._current_page, self._guild
         )
-        self._current_page = page  # clamp if parties were deleted
-        view = PartyPanelView(self, parties, page, SITE_URL)
+        self._current_page = page
+        view = PartyPanelView(self, parties, ping_roles, page, SITE_URL)
         try:
             await self._panel_message.edit(embed=embed, view=view)
         except discord.NotFound:
-            logger.warning("PartyService: panel message deleted, clearing config")
+            logger.warning(
+                "PartyService: panel message deleted — recreating in #{}",
+                self._panel_channel.name if self._panel_channel else "?",
+            )
+            channel = self._panel_channel
             self._panel_message = None
             self._panel_channel = None
             await self._repo.clear_panel_config(self._guild.id)
+            if isinstance(channel, discord.TextChannel):
+                await self.setup_panel(channel)
 
     async def navigate(
         self, interaction: discord.Interaction, delta: int
@@ -114,7 +126,7 @@ class PartyService(Service):
         await interaction.response.defer()
 
     async def _recover_panel(self) -> None:
-        """Re-attach the view to the stored panel message after restart."""
+        """Recover the panel on restart, recreating it if the message is gone."""
         config = await self._repo.get_panel_config(self._guild.id)
         if not config:
             return
@@ -125,16 +137,19 @@ class PartyService(Service):
         self._panel_channel = channel
         try:
             self._panel_message = await channel.fetch_message(message_id)
-            parties = await self._repo.get_active_parties()
-            view = PartyPanelView(self, parties, 0, SITE_URL)
-            self._client.add_view(view, message_id=message_id)
+            # Editing with a fresh view re-registers interaction handlers —
+            # no separate add_view() call needed.
             await self.refresh_panel()
             logger.info(
-                "PartyService: panel recovered (msg {})", message_id
+                "PartyService: panel recovered and refreshed (msg {})",
+                message_id,
             )
         except discord.NotFound:
             logger.warning(
-                "PartyService: panel message {} not found, clearing config",
+                "PartyService: panel message {} gone — recreating in #{}",
                 message_id,
+                channel.name,
             )
+            await self._repo.clear_panel_config(self._guild.id)
+            await self.setup_panel(channel)
             await self._repo.clear_panel_config(self._guild.id)

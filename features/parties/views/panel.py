@@ -13,80 +13,152 @@ if TYPE_CHECKING:
     from core.db.models import PartyDB
     from features.parties.service import PartyService
 
-PAGE_SIZE = 5
-_VIBE_LABEL = {"learning": "Learning", "chill": "Chill", "sweat": "Sweat"}
+_VIBE_COLOUR = {
+    "learning": 0x5865F2,
+    "chill":    0x57F287,
+    "sweat":    0xED4245,
+}
 
 
-# ── Embed builder ─────────────────────────────────────────────────────────────
+# ── Overview embed (page 0) ───────────────────────────────────────────────────
 
-def build_panel_embed(
+def _build_overview_embed(
     parties: list[PartyDB],
-    page: int,
+    ping_roles: list[dict],
+    total_pages: int,
     guild: discord.Guild,
-) -> tuple[discord.Embed, int, int]:
-    """Build the party panel embed for the given page.
-
-    Returns (embed, clamped_page, total_pages).
-    """
-    total = len(parties)
-    total_pages = max(1, math.ceil(total / PAGE_SIZE))
-    page = max(0, min(page, total_pages - 1))
-    page_parties = parties[page * PAGE_SIZE : (page + 1) * PAGE_SIZE]
-
+) -> discord.Embed:
     embed = discord.Embed(
         title="⚔️ Iron Foundry — Parties",
         color=discord.Color.gold(),
     )
 
-    if not page_parties:
-        embed.description = (
-            "No active parties right now. Create one to get started!"
-        )
+    if ping_roles:
+        mentions = "  ".join(f"<@&{r['discord_role_id']}>" for r in ping_roles)
+        embed.description = f"**Available pings**\n{mentions}"
     else:
-        embed.description = (
-            "Create and join parties for clan content.\n"
-            "Full party management is available on the website."
-        )
-        for party in page_parties:
+        embed.description = ""
+
+    if not parties:
+        nl = "\n\n" if embed.description else ""
+        embed.description += f"{nl}No active parties — create one to get started!"
+    else:
+        lines: list[str] = []
+        for i, party in enumerate(parties, 1):
             leader = party.leader_rsn or party.leader_username
-            vibe = _VIBE_LABEL.get(party.vibe, party.vibe.capitalize())
             spots = f"{len(party.members)}/{party.max_size}"
-            status = " *(Full)*" if party.status == "full" else ""
-
-            lines: list[str] = [f"**{vibe}** · {spots} · Leader: **{leader}**"]
-
-            if party.description:
-                snippet = party.description[:80]
-                if len(party.description) > 80:
-                    snippet += "…"
-                lines.append(snippet)
-
+            suffix = " *(Full)*" if party.status == "full" else ""
+            sched = ""
             if party.scheduled_at:
                 aware = (
                     party.scheduled_at
                     if party.scheduled_at.tzinfo
                     else party.scheduled_at.replace(tzinfo=timezone.utc)
                 )
-                lines.append(f"Starts <t:{int(aware.timestamp())}:R>")
-
-            exp_ts = int(party.expires_at.timestamp())
-            lines.append(f"Expires <t:{exp_ts}:R>")
-
-            embed.add_field(
-                name=f"{party.activity}{status}",
-                value="\n".join(lines),
-                inline=False,
+                sched = f" · <t:{int(aware.timestamp())}:R>"
+            lines.append(
+                f"`{i}` **{party.activity}**{suffix} — {leader} — {spots}{sched}"
             )
-
-    party_word = "party" if total == 1 else "parties"
-    embed.set_footer(
-        text=(
-            f"Page {page + 1}/{total_pages} · "
-            f"{total} active {party_word}"
+        pw = "party" if len(parties) == 1 else "parties"
+        embed.add_field(
+            name=f"Active & Upcoming {pw} ({len(parties)})",
+            value="\n".join(lines),
+            inline=False,
         )
-    )
+
+    hint = "Use ▶ to browse party details" if total_pages > 1 else ""
+    embed.set_footer(text=hint or "No parties yet")
     if guild.icon:
         embed.set_thumbnail(url=guild.icon.url)
+    return embed
+
+
+# ── Detail embed (pages 1…N) ──────────────────────────────────────────────────
+
+def _build_detail_embed(
+    party: PartyDB,
+    index: int,
+    total: int,
+    guild: discord.Guild,
+) -> discord.Embed:
+    """Full-detail embed for a single party."""
+    embed = discord.Embed(
+        title=party.activity,
+        description=party.description or "",
+        color=_VIBE_COLOUR.get(party.vibe, discord.Color.gold().value),
+    )
+
+    status_label = "Full" if party.status == "full" else "Open"
+    spots = f"{len(party.members)}/{party.max_size}"
+    embed.add_field(name="Status", value=status_label, inline=True)
+    embed.add_field(name="Vibe",   value=party.vibe.capitalize(), inline=True)
+    embed.add_field(name="Spots",  value=spots, inline=True)
+
+    leader_display = party.leader_rsn or party.leader_username
+    embed.add_field(name="Leader", value=leader_display, inline=True)
+
+    member_lines: list[str] = []
+    for m in party.members:
+        name = m.rsn or m.username
+        if m.user_id == party.leader_id:
+            name = f"👑 {name}"
+        member_lines.append(name)
+    embed.add_field(
+        name="Members",
+        value="\n".join(member_lines) or "—",
+        inline=True,
+    )
+
+    embed.add_field(name="Hub Code", value=f"`{party.hub_code}`", inline=True)
+
+    if party.scheduled_at:
+        aware = (
+            party.scheduled_at
+            if party.scheduled_at.tzinfo
+            else party.scheduled_at.replace(tzinfo=timezone.utc)
+        )
+        embed.add_field(
+            name="Starts", value=f"<t:{int(aware.timestamp())}:R>", inline=True
+        )
+
+    embed.add_field(
+        name="Expires",
+        value=f"<t:{int(party.expires_at.timestamp())}:R>",
+        inline=True,
+    )
+
+    if party.ping_role_ids:
+        embed.add_field(
+            name="Pinged",
+            value=" ".join(f"<@&{rid}>" for rid in party.ping_role_ids),
+            inline=False,
+        )
+
+    embed.set_footer(text=f"Party {index} of {total} · Use ◀ ▶ to browse")
+    if guild.icon:
+        embed.set_thumbnail(url=guild.icon.url)
+    return embed
+
+
+# ── Unified entry point ───────────────────────────────────────────────────────
+
+def build_panel_embed(
+    parties: list[PartyDB],
+    ping_roles: list[dict],
+    page: int,
+    guild: discord.Guild,
+) -> tuple[discord.Embed, int, int]:
+    """Return (embed, clamped_page, total_pages).
+
+    Page 0 = overview.  Pages 1…N = full details for parties[page-1].
+    """
+    total_pages = 1 + len(parties)
+    page = max(0, min(page, total_pages - 1))
+
+    if page == 0 or not parties:
+        embed = _build_overview_embed(parties, ping_roles, total_pages, guild)
+    else:
+        embed = _build_detail_embed(parties[page - 1], page, len(parties), guild)
 
     return embed, page, total_pages
 
@@ -308,6 +380,7 @@ class PartyPanelView(discord.ui.View):
         self,
         service: PartyService,
         parties: list[PartyDB],
+        ping_roles: list[dict],
         page: int,
         site_url: str,
     ) -> None:
