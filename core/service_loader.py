@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from core.discord_client import DiscordClient
     from features.tickets.dm_service import DMTicketService
     from features.member.join_roles.service import JoinRoleService
+    from features.parties.service import PartyService
     from features.member.roles.service import RoleService
     from features.tickets.ticket_service import TicketService
     from features.user_keys.service import UserKeyService
@@ -182,6 +183,26 @@ async def load_user_key_service(
     return service
 
 
+async def load_party_service(
+    guild: discord.Guild,
+    tree: app_commands.CommandTree,
+    session_factory: async_sessionmaker[AsyncSession],
+    client: DiscordClient,
+) -> "PartyService":
+    """Initialise the party panel service and register /party commands."""
+    from features.parties.commands import PartyGroup
+    from features.parties.pg_repository import PgPartyRepository
+    from features.parties.service import PartyService
+
+    repo = PgPartyRepository(session_factory=session_factory)
+    service = PartyService(guild=guild, repo=repo, client=client)
+    await service.initialize()
+
+    tree.add_command(PartyGroup(service=service), guild=guild)
+    logger.info("Party service initialised and /party commands registered")
+    return service
+
+
 async def load_dm_ticket_service(
     guild: discord.Guild,
     ticket_service: TicketService,
@@ -221,6 +242,7 @@ async def load_all_services(
     JoinRoleService,
     DMTicketService,
     "UserKeyService",
+    "PartyService",
 ]:
     """Load all services, then register the help command.
 
@@ -235,6 +257,7 @@ async def load_all_services(
         load_broadcast_service(guild, tree, registry, session_factory),
         load_join_role_service(guild, tree, registry, session_factory, client),
         load_user_key_service(guild, tree, session_factory, client),
+        load_party_service(guild, tree, session_factory, client),
     )
     ticket = cast("TicketService", _results[0])
     role = cast("RoleService", _results[1])
@@ -242,6 +265,7 @@ async def load_all_services(
     broadcast = cast("BroadcastService", _results[3])
     join_role = cast("JoinRoleService", _results[4])
     user_keys = cast("UserKeyService", _results[5])
+    parties = cast("PartyService", _results[6])
 
     dm_ticket = await load_dm_ticket_service(guild, ticket)
 
@@ -254,4 +278,5 @@ async def load_all_services(
         join_role,
         dm_ticket,
         user_keys,
+        parties,
     )
