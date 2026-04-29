@@ -10,7 +10,11 @@ from loguru import logger
 
 from core.service_base import Service
 from features.parties.pg_repository import PgPartyRepository
-from features.parties.views.panel import PartyPanelView, build_panel_embed
+from features.parties.views.panel import (
+    PartyPanelView,
+    active_ping_content,
+    build_panel_embed,
+)
 
 SITE_URL = (
     os.getenv("FRONTEND_URL", "https://ironfoundry.cc")
@@ -19,6 +23,7 @@ SITE_URL = (
     .rstrip("/")
 )
 _REFRESH_INTERVAL = 30  # seconds
+_ALLOWED_MENTIONS = discord.AllowedMentions(roles=True)
 
 
 class PartyService(Service):
@@ -35,7 +40,6 @@ class PartyService(Service):
         self._client = client
         self._panel_message: discord.Message | None = None
         self._panel_channel: discord.TextChannel | None = None
-        self._current_page: int = 0
         self._refresh_task: asyncio.Task | None = None
 
     @property
@@ -78,12 +82,17 @@ class PartyService(Service):
     async def setup_panel(self, channel: discord.TextChannel) -> None:
         """Post a fresh panel in *channel* and persist the config."""
         parties, ping_roles = await self._fetch_state()
-        embed, page, _ = build_panel_embed(parties, ping_roles, 0, self._guild)
-        view = PartyPanelView(self, parties, ping_roles, page, SITE_URL)
+        embed, _, _ = build_panel_embed(parties, ping_roles, 0, self._guild)
+        view = PartyPanelView(self, parties, ping_roles, 0, SITE_URL)
+        content = active_ping_content(parties) or None
 
         self._panel_channel = channel
-        self._current_page = 0
-        self._panel_message = await channel.send(embed=embed, view=view)
+        self._panel_message = await channel.send(
+            content=content,
+            embed=embed,
+            view=view,
+            allowed_mentions=_ALLOWED_MENTIONS,
+        )
         await self._repo.save_panel_config(
             self._guild.id, channel.id, self._panel_message.id
         )
@@ -98,13 +107,16 @@ class PartyService(Service):
         if not self._panel_message:
             return
         parties, ping_roles = await self._fetch_state()
-        embed, page, _ = build_panel_embed(
-            parties, ping_roles, self._current_page, self._guild
-        )
-        self._current_page = page
-        view = PartyPanelView(self, parties, ping_roles, page, SITE_URL)
+        embed, _, _ = build_panel_embed(parties, ping_roles, 0, self._guild)
+        view = PartyPanelView(self, parties, ping_roles, 0, SITE_URL)
+        content = active_ping_content(parties) or None
         try:
-            await self._panel_message.edit(embed=embed, view=view)
+            await self._panel_message.edit(
+                content=content,
+                embed=embed,
+                view=view,
+                allowed_mentions=_ALLOWED_MENTIONS,
+            )
         except discord.NotFound:
             logger.warning(
                 "PartyService: panel message deleted — recreating in #{}",
@@ -116,14 +128,6 @@ class PartyService(Service):
             await self._repo.clear_panel_config(self._guild.id)
             if isinstance(channel, discord.TextChannel):
                 await self.setup_panel(channel)
-
-    async def navigate(
-        self, interaction: discord.Interaction, delta: int
-    ) -> None:
-        """Move the panel page by *delta* and refresh."""
-        self._current_page = max(0, self._current_page + delta)
-        await self.refresh_panel()
-        await interaction.response.defer()
 
     async def _recover_panel(self) -> None:
         """Recover the panel on restart, recreating it if the message is gone."""
@@ -137,8 +141,6 @@ class PartyService(Service):
         self._panel_channel = channel
         try:
             self._panel_message = await channel.fetch_message(message_id)
-            # Editing with a fresh view re-registers interaction handlers —
-            # no separate add_view() call needed.
             await self.refresh_panel()
             logger.info(
                 "PartyService: panel recovered and refreshed (msg {})",
@@ -152,4 +154,3 @@ class PartyService(Service):
             )
             await self._repo.clear_panel_config(self._guild.id)
             await self.setup_panel(channel)
-            await self._repo.clear_panel_config(self._guild.id)

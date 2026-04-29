@@ -22,6 +22,14 @@ _VIBE_COLOUR = {
 
 # ── Overview embed (page 0) ───────────────────────────────────────────────────
 
+def active_ping_content(parties: list[PartyDB]) -> str:
+    """Return a space-separated string of role mentions for all pings in active
+    parties.  Used as message *content* so Discord actually fires notifications.
+    """
+    ids = {rid for p in parties for rid in (p.ping_role_ids or [])}
+    return " ".join(f"<@&{rid}>" for rid in ids) if ids else ""
+
+
 def _build_overview_embed(
     parties: list[PartyDB],
     ping_roles: list[dict],
@@ -33,9 +41,12 @@ def _build_overview_embed(
         color=discord.Color.gold(),
     )
 
-    if ping_roles:
-        mentions = "  ".join(f"<@&{r['discord_role_id']}>" for r in ping_roles)
-        embed.description = f"**Available pings**\n{mentions}"
+    # Only show roles that are actually used by a current active party
+    active_ids = {rid for p in parties for rid in (p.ping_role_ids or [])}
+    active_roles = [r for r in ping_roles if r["discord_role_id"] in active_ids]
+    if active_roles:
+        mentions = "  ".join(f"<@&{r['discord_role_id']}>" for r in active_roles)
+        embed.description = f"**Active pings**\n{mentions}"
     else:
         embed.description = ""
 
@@ -252,48 +263,32 @@ class DiscardPartyButton(discord.ui.Button["PartyPanelView"]):
         )
 
 
-class _PrevPageButton(discord.ui.Button["PartyPanelView"]):
-    def __init__(self, *, disabled: bool) -> None:
+class _BrowseDetailsButton(discord.ui.Button["PartyPanelView"]):
+    """Opens an ephemeral per-party detail browser."""
+
+    def __init__(self, *, has_parties: bool) -> None:
         super().__init__(
-            label="◀",
+            label="Browse Details",
             style=discord.ButtonStyle.secondary,
-            custom_id="party_panel_prev",
-            disabled=disabled,
+            custom_id="party_panel_browse",
+            disabled=not has_parties,
             row=1,
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
         assert self.view is not None
-        await self.view.service.navigate(interaction, delta=-1)
-
-
-class _NextPageButton(discord.ui.Button["PartyPanelView"]):
-    def __init__(self, *, disabled: bool) -> None:
-        super().__init__(
-            label="▶",
-            style=discord.ButtonStyle.secondary,
-            custom_id="party_panel_next",
-            disabled=disabled,
-            row=1,
+        service = self.view.service
+        parties = await service.repo.get_active_parties()
+        if not parties:
+            await interaction.response.send_message(
+                "No parties to browse.", ephemeral=True
+            )
+            return
+        embed = _build_detail_embed(parties[0], 1, len(parties), service._guild)
+        view = _EphemeralBrowserView(service=service, parties=parties, page=0)
+        await interaction.response.send_message(
+            embed=embed, view=view, ephemeral=True
         )
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        assert self.view is not None
-        await self.view.service.navigate(interaction, delta=1)
-
-
-class _PageIndicator(discord.ui.Button["PartyPanelView"]):
-    def __init__(self, page: int, total: int) -> None:
-        super().__init__(
-            label=f"{page + 1} / {total}",
-            style=discord.ButtonStyle.secondary,
-            custom_id="party_panel_page",
-            disabled=True,
-            row=1,
-        )
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer()
 
 
 # ── Join select (ephemeral) ───────────────────────────────────────────────────
@@ -371,43 +366,122 @@ class _JoinSelectView(discord.ui.View):
         )
 
 
-# ── Main panel view ───────────────────────────────────────────────────────────
+# ── Ephemeral party browser ───────────────────────────────────────────────────
 
-class PartyPanelView(discord.ui.View):
-    """Persistent party panel view shown in the configured channel."""
+class _EphemeralBrowserView(discord.ui.View):
+    """Ephemeral paginated view showing full party details, one party per page."""
 
     def __init__(
         self,
         service: PartyService,
         parties: list[PartyDB],
-        ping_roles: list[dict],
         page: int,
+    ) -> None:
+        super().__init__(timeout=120)
+        self._service = service
+        self._parties = parties
+        self._page = page
+        total = len(parties)
+
+        # Row 0: navigation
+        prev = discord.ui.Button(
+            label="◀", style=discord.ButtonStyle.secondary,
+            disabled=(page == 0), row=0,
+        )
+        prev.callback = self._on_prev
+        self.add_item(prev)
+
+        indicator = discord.ui.Button(
+            label=f"Party {page + 1} / {total}",
+            style=discord.ButtonStyle.secondary,
+            disabled=True, row=0,
+        )
+        indicator.callback = lambda i: i.response.defer()  # type: ignore[attr-defined]
+        self.add_item(indicator)
+
+        nxt = discord.ui.Button(
+            label="▶", style=discord.ButtonStyle.secondary,
+            disabled=(page >= total - 1), row=0,
+        )
+        nxt.callback = self._on_next
+        self.add_item(nxt)
+
+        # Row 1: same "Join a Party" select as the main panel
+        join = discord.ui.Button(
+            label="Join a Party", style=discord.ButtonStyle.success, row=1,
+        )
+        join.callback = self._on_join
+        self.add_item(join)
+
+    async def _on_prev(self, interaction: discord.Interaction) -> None:
+        await self._navigate(interaction, self._page - 1)
+
+    async def _on_next(self, interaction: discord.Interaction) -> None:
+        await self._navigate(interaction, self._page + 1)
+
+    async def _navigate(
+        self, interaction: discord.Interaction, page: int
+    ) -> None:
+        parties = await self._service.repo.get_active_parties()
+        if not parties:
+            await interaction.response.edit_message(
+                content="No more active parties.", embed=None, view=None
+            )
+            return
+        page = max(0, min(page, len(parties) - 1))
+        embed = _build_detail_embed(
+            parties[page], page + 1, len(parties), self._service._guild
+        )
+        await interaction.response.edit_message(
+            embed=embed,
+            view=_EphemeralBrowserView(self._service, parties, page),
+        )
+
+    async def _on_join(self, interaction: discord.Interaction) -> None:
+        parties = await self._service.repo.get_active_parties()
+        open_parties = [p for p in parties if p.status == "open"]
+        if not open_parties:
+            await interaction.response.send_message(
+                "No open parties right now.", ephemeral=True
+            )
+            return
+        view = _JoinSelectView(service=self._service, parties=open_parties)
+        await interaction.response.send_message(
+            "Select a party to join:", view=view, ephemeral=True
+        )
+
+
+# ── Main panel view ───────────────────────────────────────────────────────────
+
+class PartyPanelView(discord.ui.View):
+    """Persistent party panel view — always shows the overview page."""
+
+    def __init__(
+        self,
+        service: PartyService,
+        parties: list[PartyDB],
+        ping_roles: list[dict],  # noqa: ARG002 — kept for call-site compat
+        page: int,  # noqa: ARG002
         site_url: str,
     ) -> None:
         super().__init__(timeout=None)
         self.service = service
 
-        total_pages = 1 + len(parties)  # page 0 = overview, pages 1..N = detail
-        page = max(0, min(page, total_pages - 1))
-
-        # Row 0: actions
+        # Row 0: action buttons
         self.add_item(CreatePartyButton())
         self.add_item(JoinPartyButton())
         self.add_item(DiscardPartyButton())
+
+        # Row 1: browse ephemeral + website link
+        self.add_item(_BrowseDetailsButton(has_parties=bool(parties)))
         self.add_item(
             discord.ui.Button(
                 label="Iron Foundry Parties",
                 url=f"{site_url}/parties",
                 style=discord.ButtonStyle.link,
-                row=0,
+                row=1,
             )
         )
-
-        # Row 1: pagination (only when needed)
-        if total_pages > 1:
-            self.add_item(_PrevPageButton(disabled=page == 0))
-            self.add_item(_PageIndicator(page, total_pages))
-            self.add_item(_NextPageButton(disabled=page >= total_pages - 1))
 
 
 # ── Discard confirm ───────────────────────────────────────────────────────────
