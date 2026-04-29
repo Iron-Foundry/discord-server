@@ -71,6 +71,63 @@ class PgPartyRepository:
             )
             return list(result.scalars().all())
 
+    async def get_user_active_party(self, user_id: str) -> PartyDB | None:
+        """Return any active party the user belongs to (as leader or member)."""
+        async with self._factory() as session:
+            result = await session.execute(
+                _with_members(
+                    select(PartyDB)
+                    .join(
+                        PartyMemberDB,
+                        (PartyMemberDB.party_id == PartyDB.id)
+                        & (PartyMemberDB.user_id == user_id),
+                    )
+                    .where(PartyDB.status != "closed")
+                )
+            )
+            return result.scalar_one_or_none()
+
+    async def add_member(
+        self,
+        party_id: str,
+        *,
+        user_id: str,
+        username: str,
+        rsn: str | None,
+    ) -> PartyDB | None:
+        """Add a member to the party and return the updated party."""
+        now = datetime.now(timezone.utc)
+        async with self._factory() as session:
+            result = await session.execute(
+                _with_members(
+                    select(PartyDB).where(PartyDB.id == party_id)
+                )
+            )
+            party = result.scalar_one_or_none()
+            if not party or party.status == "closed":
+                return None
+            if any(m.user_id == user_id for m in party.members):
+                raise ValueError("already_member")
+            member = PartyMemberDB(
+                id=str(uuid.uuid4()),
+                party_id=party_id,
+                user_id=user_id,
+                username=username,
+                rsn=rsn,
+                joined_at=now,
+            )
+            session.add(member)
+            await session.flush()
+            await session.refresh(party, attribute_names=["members"])
+            # Update full/open status
+            if len(party.members) >= party.max_size:
+                party.status = "full"
+            await session.commit()
+            logger.info(
+                "PartyRepository: {} joined party {}", user_id, party_id
+            )
+            return party
+
     async def get_leader_party(self, leader_id: str) -> PartyDB | None:
         """Return the active party led by this user, if any."""
         async with self._factory() as session:

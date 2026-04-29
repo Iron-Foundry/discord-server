@@ -113,6 +113,40 @@ class CreatePartyButton(discord.ui.Button["PartyPanelView"]):
         await interaction.response.send_modal(modal)
 
 
+class JoinPartyButton(discord.ui.Button["PartyPanelView"]):
+    """Opens an ephemeral select of open parties to join."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            label="Join a Party",
+            style=discord.ButtonStyle.success,
+            custom_id="party_panel_join",
+            row=0,
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        assert self.view is not None
+        service = self.view.service
+        user_id = str(interaction.user.id)
+
+        parties = await service.repo.get_active_parties()
+        open_parties = [p for p in parties if p.status == "open"]
+
+        if not open_parties:
+            await interaction.response.send_message(
+                "No open parties right now. Create one!",
+                ephemeral=True,
+            )
+            return
+
+        view = _JoinSelectView(service=service, parties=open_parties)
+        await interaction.response.send_message(
+            "Select a party to join:",
+            view=view,
+            ephemeral=True,
+        )
+
+
 class DiscardPartyButton(discord.ui.Button["PartyPanelView"]):
     """Lets the leader discard their own active party."""
 
@@ -190,6 +224,81 @@ class _PageIndicator(discord.ui.Button["PartyPanelView"]):
         await interaction.response.defer()
 
 
+# ── Join select (ephemeral) ───────────────────────────────────────────────────
+
+class _JoinSelectView(discord.ui.View):
+    """Ephemeral select menu of open parties the user can join."""
+
+    def __init__(
+        self, service: PartyService, parties: list[PartyDB]
+    ) -> None:
+        super().__init__(timeout=60)
+        self._service = service
+
+        options = [
+            discord.SelectOption(
+                label=p.activity[:100],
+                value=p.id,
+                description=(
+                    f"{len(p.members)}/{p.max_size} members"
+                    + (f" · {p.vibe.capitalize()}" if p.vibe else "")
+                )[:100],
+            )
+            for p in parties[:25]
+        ]
+        select = discord.ui.Select(
+            placeholder="Choose a party…",
+            options=options,
+            custom_id="party_join_select",
+        )
+        select.callback = self._on_select
+        self.add_item(select)
+
+    async def _on_select(self, interaction: discord.Interaction) -> None:
+        party_id: str = interaction.data["values"][0]  # type: ignore[index]
+        user = interaction.user
+        user_id = str(user.id)
+
+        rsn = await self._service.repo.get_user_rsn(user_id)
+        try:
+            party = await self._service.repo.add_member(
+                party_id,
+                user_id=user_id,
+                username=user.display_name,
+                rsn=rsn,
+            )
+        except ValueError:
+            await interaction.response.edit_message(
+                content="You're already in that party.",
+                view=None,
+            )
+            return
+
+        if not party:
+            await interaction.response.edit_message(
+                content="That party no longer exists or is closed.",
+                view=None,
+            )
+            return
+
+        await self._service.refresh_panel()
+
+        await interaction.response.edit_message(
+            content=(
+                f"✅ Joined **{party.activity}**!\n"
+                f"Hub code: `{party.hub_code}`\n"
+                "Manage your slot at ironfoundry.cc/parties."
+            ),
+            view=None,
+        )
+        logger.info(
+            "JoinSelect: {} joined party {} ({})",
+            user,
+            party.id,
+            party.activity,
+        )
+
+
 # ── Main panel view ───────────────────────────────────────────────────────────
 
 class PartyPanelView(discord.ui.View):
@@ -210,6 +319,7 @@ class PartyPanelView(discord.ui.View):
 
         # Row 0: actions
         self.add_item(CreatePartyButton())
+        self.add_item(JoinPartyButton())
         self.add_item(DiscardPartyButton())
         self.add_item(
             discord.ui.Button(
