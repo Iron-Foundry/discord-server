@@ -82,7 +82,9 @@ class PartyService(Service):
         view = PartyPanelView(self, parties, ping_roles, 0, SITE_URL)
 
         self._panel_channel = channel
-        self._panel_message = await channel.send(embed=embed, view=view)
+        self._panel_message = await channel.send(
+            embed=embed, view=view, allowed_mentions=_ALLOWED_MENTIONS
+        )
         await self._repo.save_panel_config(
             self._guild.id, channel.id, self._panel_message.id
         )
@@ -100,7 +102,9 @@ class PartyService(Service):
         embed, _, _ = build_panel_embed(parties, ping_roles, 0, self._guild)
         view = PartyPanelView(self, parties, ping_roles, 0, SITE_URL)
         try:
-            await self._panel_message.edit(embed=embed, view=view)
+            await self._panel_message.edit(
+                embed=embed, view=view, allowed_mentions=_ALLOWED_MENTIONS
+            )
         except discord.NotFound:
             logger.warning(
                 "PartyService: panel message deleted - recreating in #{}",
