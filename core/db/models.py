@@ -67,6 +67,27 @@ class User(Base):
     )
 
 
+class UserAccount(Base):
+    """One row per RSN linked to a Discord user."""
+
+    __tablename__ = "user_accounts"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    discord_user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.discord_user_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    rsn: Mapped[str] = mapped_column(Text, nullable=False)
+    is_primary: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )
+
+
 class Ticket(Base):
     __tablename__ = "tickets"
 

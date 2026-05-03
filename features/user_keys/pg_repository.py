@@ -4,11 +4,11 @@ from datetime import datetime, timezone
 
 import discord
 from loguru import logger
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from core.db.models import User
+from core.db.models import User, UserAccount
 from features.user_keys.models import UserKey
 
 
@@ -104,7 +104,10 @@ class PgUserKeyRepository:
             return d
 
     async def link_rsn(self, discord_user_id: int, rsn: str) -> None:
-        """Set the RSN on a user profile."""
+        """Set the primary RSN on a user profile.
+
+        Demotes any existing primary to alt, then upserts the new RSN as primary.
+        """
         now = datetime.now(timezone.utc)
         stmt = (
             pg_insert(User)
@@ -123,7 +126,201 @@ class PgUserKeyRepository:
         )
         async with self._factory() as session:
             await session.execute(stmt)
+            await self._upsert_primary_account(session, discord_user_id, rsn)
             await session.commit()
+
+    async def _upsert_primary_account(
+        self, session: AsyncSession, discord_user_id: int, rsn: str
+    ) -> None:
+        """Demote current primary to alt and set rsn as new primary in user_accounts."""
+        now = datetime.now(timezone.utc)
+
+        await session.execute(
+            update(UserAccount)
+            .where(
+                UserAccount.discord_user_id == discord_user_id,
+                UserAccount.is_primary == True,  # noqa: E712
+            )
+            .values(is_primary=False)
+        )
+
+        existing = await session.execute(
+            select(UserAccount.id).where(
+                UserAccount.discord_user_id == discord_user_id,
+                func.lower(UserAccount.rsn) == rsn.lower(),
+            )
+        )
+        if existing.scalar_one_or_none():
+            await session.execute(
+                update(UserAccount)
+                .where(
+                    UserAccount.discord_user_id == discord_user_id,
+                    func.lower(UserAccount.rsn) == rsn.lower(),
+                )
+                .values(is_primary=True)
+            )
+        else:
+            await session.execute(
+                pg_insert(UserAccount).values(
+                    discord_user_id=discord_user_id,
+                    rsn=rsn,
+                    is_primary=True,
+                    created_at=now,
+                )
+            )
+
+    async def get_user_accounts(self, discord_user_id: int) -> list[dict]:
+        """Return all RSN accounts linked to a user, primary first."""
+        async with self._factory() as session:
+            result = await session.execute(
+                select(UserAccount)
+                .where(UserAccount.discord_user_id == discord_user_id)
+                .order_by(UserAccount.is_primary.desc(), UserAccount.created_at.asc())
+            )
+            return [
+                {
+                    "id": row.id,
+                    "rsn": row.rsn,
+                    "is_primary": row.is_primary,
+                }
+                for row in result.scalars()
+            ]
+
+    async def add_account(self, discord_user_id: int, rsn: str) -> str | None:
+        """Add an alt RSN. Returns an error message string on failure, None on success."""
+        async with self._factory() as session:
+            # Global uniqueness check
+            conflict = await session.execute(
+                select(UserAccount.discord_user_id).where(
+                    func.lower(UserAccount.rsn) == rsn.lower()
+                )
+            )
+            conflict_owner = conflict.scalar_one_or_none()
+            if conflict_owner == discord_user_id:
+                return "You already have that RSN linked."
+            if conflict_owner is not None:
+                return (
+                    "That RSN is already linked. If this is your account, contact staff."
+                )
+
+            # Cap check
+            cap = await session.execute(
+                select(func.count())
+                .select_from(UserAccount)
+                .where(UserAccount.discord_user_id == discord_user_id)
+            )
+            if (cap.scalar_one() or 0) >= 5:
+                return (
+                    "You've reached the 5-account limit."
+                    " Remove an alt at ironfoundry.cc/members/settings first."
+                )
+
+            now = datetime.now(timezone.utc)
+
+            # Check if user has any accounts (to determine is_primary)
+            count_result = await session.execute(
+                select(func.count())
+                .select_from(UserAccount)
+                .where(UserAccount.discord_user_id == discord_user_id)
+            )
+            is_first = (count_result.scalar_one() or 0) == 0
+
+            await session.execute(
+                pg_insert(UserAccount).values(
+                    discord_user_id=discord_user_id,
+                    rsn=rsn,
+                    is_primary=is_first,
+                    created_at=now,
+                )
+            )
+
+            if is_first:
+                await session.execute(
+                    update(User)
+                    .where(User.discord_user_id == discord_user_id)
+                    .values(rsn=rsn, updated_at=now)
+                )
+
+            await session.commit()
+            return None
+
+    async def set_primary_account(self, discord_user_id: int, rsn: str) -> str | None:
+        """Promote an RSN to primary. Returns error message or None on success."""
+        async with self._factory() as session:
+            row_result = await session.execute(
+                select(UserAccount).where(
+                    UserAccount.discord_user_id == discord_user_id,
+                    func.lower(UserAccount.rsn) == rsn.lower(),
+                )
+            )
+            row = row_result.scalar_one_or_none()
+            if not row:
+                return "That RSN is not linked to your account."
+
+            if row.is_primary:
+                return None
+
+            now = datetime.now(timezone.utc)
+            await session.execute(
+                update(UserAccount)
+                .where(
+                    UserAccount.discord_user_id == discord_user_id,
+                    UserAccount.is_primary == True,  # noqa: E712
+                )
+                .values(is_primary=False)
+            )
+            await session.execute(
+                update(UserAccount)
+                .where(UserAccount.id == row.id)
+                .values(is_primary=True)
+            )
+            await session.execute(
+                update(User)
+                .where(User.discord_user_id == discord_user_id)
+                .values(rsn=row.rsn, updated_at=now)
+            )
+            await session.commit()
+            return None
+
+    async def remove_account(self, discord_user_id: int, rsn: str) -> str | None:
+        """Remove a linked RSN. Returns error message or None on success."""
+        async with self._factory() as session:
+            row_result = await session.execute(
+                select(UserAccount).where(
+                    UserAccount.discord_user_id == discord_user_id,
+                    func.lower(UserAccount.rsn) == rsn.lower(),
+                )
+            )
+            row = row_result.scalar_one_or_none()
+            if not row:
+                return "That RSN is not linked to your account."
+
+            count_result = await session.execute(
+                select(func.count())
+                .select_from(UserAccount)
+                .where(UserAccount.discord_user_id == discord_user_id)
+            )
+            total = count_result.scalar_one() or 0
+
+            if row.is_primary and total > 1:
+                return (
+                    "Cannot remove your primary RSN while other accounts are linked."
+                    " Set a different primary first."
+                )
+
+            now = datetime.now(timezone.utc)
+            if total == 1:
+                await session.execute(
+                    update(User)
+                    .where(User.discord_user_id == discord_user_id)
+                    .values(rsn=None, updated_at=now)
+                )
+
+            await session.execute(
+                delete(UserAccount).where(UserAccount.id == row.id)
+            )
+            await session.commit()
+            return None
 
     async def upsert_member(self, member: discord.Member) -> None:
         """Insert a bare user profile for a guild member, preserving existing RSN."""

@@ -43,6 +43,42 @@ class UserKeyService(Service):
         await self._repo.link_rsn(member.id, rsn)
         logger.info(f"UserKeyService: linked RSN {rsn!r} for {member} ({member.id})")
 
+    async def get_user_accounts(self, member: discord.Member) -> list[dict]:
+        """Return all linked RSN accounts for a member."""
+        return await self._repo.get_user_accounts(member.id)
+
+    async def add_account(self, member: discord.Member, rsn: str) -> str | None:
+        """Add an alt RSN. Returns an error message or None on success."""
+        error = await self._repo.add_account(member.id, rsn)
+        if not error:
+            logger.info(
+                "UserKeyService: added alt RSN {!r} for {} ({})", rsn, member, member.id
+            )
+        return error
+
+    async def set_primary_account(
+        self, member: discord.Member, rsn: str
+    ) -> str | None:
+        """Promote an RSN to primary. Returns error message or None on success."""
+        error = await self._repo.set_primary_account(member.id, rsn)
+        if not error:
+            logger.info(
+                "UserKeyService: set primary RSN {!r} for {} ({})",
+                rsn,
+                member,
+                member.id,
+            )
+        return error
+
+    async def remove_account(self, member: discord.Member, rsn: str) -> str | None:
+        """Remove a linked RSN. Returns error message or None on success."""
+        error = await self._repo.remove_account(member.id, rsn)
+        if not error:
+            logger.info(
+                "UserKeyService: removed RSN {!r} for {} ({})", rsn, member, member.id
+            )
+        return error
+
     async def set_stats_opt_out(self, member: discord.Member, opt_out: bool) -> None:
         """Set or clear the stats opt-out flag for a member."""
         await self._repo.set_stats_opt_out(member.id, opt_out)
