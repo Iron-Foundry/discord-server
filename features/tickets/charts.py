@@ -76,7 +76,7 @@ async def build_stats_chart(
     _apply_base_layout(fig)
     fig.update_layout(  # type: ignore[call-arg]
         title={
-            "text": f"Tickets by Type — {display_name} ({period_label})",
+            "text": f"Tickets by Type - {display_name} ({period_label})",
             "font": {"color": _TEXT},
         },
     )
@@ -117,15 +117,15 @@ async def build_leaderboard_chart(
             for e in entries
         ]
         y_title = "Avg Resolution (hours)"
-        chart_title = f"Ticket Leaderboard — Avg Resolution Time ({period_label})"
+        chart_title = f"Ticket Leaderboard - Avg Resolution Time ({period_label})"
     elif metric == "participated":
         values = [e.tickets_participated for e in entries]
         y_title = "Tickets Participated In"
-        chart_title = f"Ticket Leaderboard — Tickets Participated In ({period_label})"
+        chart_title = f"Ticket Leaderboard - Tickets Participated In ({period_label})"
     else:
         values = [e.tickets_closed for e in entries]
         y_title = "Tickets Closed"
-        chart_title = f"Ticket Leaderboard — Tickets Closed ({period_label})"
+        chart_title = f"Ticket Leaderboard - Tickets Closed ({period_label})"
 
     fig = go.Figure(
         go.Bar(
@@ -179,7 +179,7 @@ async def build_system_chart(
     _apply_base_layout(fig)
     fig.update_layout(  # type: ignore[call-arg]
         title={
-            "text": f"Tickets by Type — System Overview ({period_label})",
+            "text": f"Tickets by Type - System Overview ({period_label})",
             "font": {"color": _TEXT},
         },
     )

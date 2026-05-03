@@ -16,7 +16,7 @@ from features.member.roles.views.panel_view import (
 
 
 class RoleService(Service):
-    """Manages role panels — creation, updates, persistence, and interaction handling."""
+    """Manages role panels - creation, updates, persistence, and interaction handling."""
 
     def __init__(
         self,
@@ -355,7 +355,7 @@ def _build_embed(panel: RolePanel) -> discord.Embed:
         lines: list[str] = []
         for r in panel.roles:
             prefix = f"{r.emoji} " if r.emoji else ""
-            suffix = f" — {r.description}" if r.description else ""
+            suffix = f" - {r.description}" if r.description else ""
             lines.append(f"{prefix}<@&{r.role_id}>{suffix}")
         embed.add_field(name="Available Roles", value="\n".join(lines), inline=False)
     return embed

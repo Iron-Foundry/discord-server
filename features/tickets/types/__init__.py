@@ -28,10 +28,10 @@ def register_all_types(service: "TicketService") -> None:
     Register all ticket types with the TicketService.
     Role IDs are read from environment variables:
 
-      STAFF_ROLE_ID        — Handles General, Rankup, Join CC, Contact Mentor
-      SENIOR_STAFF_ROLE_ID — Handles Sensitive tickets
-      OWNER_ROLE_ID        — Handles Sensitive tickets
-      MENTOR_ROLE_ID       — Handles Contact Mentor tickets
+      STAFF_ROLE_ID        - Handles General, Rankup, Join CC, Contact Mentor
+      SENIOR_STAFF_ROLE_ID - Handles Sensitive tickets
+      OWNER_ROLE_ID        - Handles Sensitive tickets
+      MENTOR_ROLE_ID       - Handles Contact Mentor tickets
     """
     from core.config import ConfigInterface, ConfigVars
 

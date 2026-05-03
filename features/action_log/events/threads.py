@@ -66,7 +66,7 @@ def register(registrar: EventRegistrar) -> None:
         if after.parent:
             embed.add_field(name="Parent", value=after.parent.mention, inline=True)
         embed.set_footer(text=f"Thread ID: {after.id}")
-        logger.debug(f"ActionLog[channels]: thread '{after.name}' updated — {lines}")
+        logger.debug(f"ActionLog[channels]: thread '{after.name}' updated - {lines}")
         await service.post(LogCategory.CHANNELS, embed)
 
     async def on_thread_delete(thread: discord.Thread) -> None:

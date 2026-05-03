@@ -1,1 +1,1 @@
-"""Ticket system — creation, lifecycle, types, transcripts."""
+"""Ticket system - creation, lifecycle, types, transcripts."""

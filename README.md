@@ -1,4 +1,4 @@
-# Iron Foundry — Discord Bot
+# Iron Foundry - Discord Bot
 
 The main Discord bot for the Iron Foundry OSRS clan. Handles the ticket system, role management,
 action logging, and general server automation.
@@ -51,7 +51,7 @@ All configuration is read from a `.env` file in the project root.
 
 | Variable | Default | Description |
 |---|---|---|
-| `DEBUG_MODE` | — | Enable debug logging. |
+| `DEBUG_MODE` | - | Enable debug logging. |
 
 ---
 
@@ -59,7 +59,7 @@ All configuration is read from a `.env` file in the project root.
 
 | Group | Description |
 |---|---|
-| `/ticket` | Ticket lifecycle — open, close, reopen, manage, and view stats. |
+| `/ticket` | Ticket lifecycle - open, close, reopen, manage, and view stats. |
 | `/tickettype` | Enable or disable ticket types on the creation panel. |
 | `/handler` | Manage transcript persistence handlers. |
 | `/broadcast` | Forward messages to a configured role via DM. |
@@ -76,12 +76,12 @@ All configuration is read from a `.env` file in the project root.
 
 ```
 core/
-  discord_client.py   — DiscordClient: event handling and startup orchestration
-  service_loader.py   — async functions that initialise each service in parallel
-  command_handler.py  — CommandHandler singleton, owns the slash-command tree
-  config.py           — ConfigInterface, env-var access
-  service_base.py     — Service abstract base class
-  service_handler.py  — ServiceHandler lifecycle manager
+  discord_client.py   - DiscordClient: event handling and startup orchestration
+  service_loader.py   - async functions that initialise each service in parallel
+  command_handler.py  - CommandHandler singleton, owns the slash-command tree
+  config.py           - ConfigInterface, env-var access
+  service_base.py     - Service abstract base class
+  service_handler.py  - ServiceHandler lifecycle manager
 ```
 
 ---

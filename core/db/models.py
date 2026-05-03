@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM models — discord-server subset.
+"""SQLAlchemy ORM models - discord-server subset.
 
 Only includes tables that the bot reads or writes. Must match the PG schema
 defined in api-backend/alembic/versions/ exactly.
@@ -124,7 +124,7 @@ class Config(Base):
 
 
 class PartyDB(Base):
-    """Mirrors api-backend parties table — read/write via shared PostgreSQL."""
+    """Mirrors api-backend parties table - read/write via shared PostgreSQL."""
 
     __tablename__ = "parties"
 

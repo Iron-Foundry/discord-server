@@ -1,1 +1,1 @@
-"""Core infrastructure — client, service loader, config, lifecycle."""
+"""Core infrastructure - client, service loader, config, lifecycle."""

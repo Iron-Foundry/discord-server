@@ -90,7 +90,7 @@ def make_privacy_command(service: UserKeyService) -> app_commands.Command:  # ty
         if opt_out:
             await interaction.response.send_message(
                 "Opted out. Your stats, loot, and PBs will no longer be stored by the "
-                "Foundry. Existing data is not deleted — contact staff if you want it "
+                "Foundry. Existing data is not deleted - contact staff if you want it "
                 "removed.",
                 ephemeral=True,
             )

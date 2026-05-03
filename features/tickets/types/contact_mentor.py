@@ -106,15 +106,15 @@ class ContactMentorTicket(TicketTypeConfig):
     def build_create_embed(self, record: TicketRecord) -> discord.Embed:
         meta = record.metadata
         embed = discord.Embed(
-            title=f"{self.emoji} PVM Help — #{record.ticket_id:04d}",
+            title=f"{self.emoji} PVM Help - #{record.ticket_id:04d}",
             color=self.color,
             timestamp=datetime.now(UTC),
         )
         embed.add_field(name="Player", value=f"<@{record.creator.id}>", inline=True)
-        embed.add_field(name="RSN", value=meta.get("rsn", "—"), inline=True)
-        embed.add_field(name="Content", value=meta.get("content", "—"), inline=False)
+        embed.add_field(name="RSN", value=meta.get("rsn", "-"), inline=True)
+        embed.add_field(name="Content", value=meta.get("content", "-"), inline=False)
         embed.add_field(
-            name="Experience", value=meta.get("experience", "—"), inline=False
+            name="Experience", value=meta.get("experience", "-"), inline=False
         )
         embed.set_footer(
             text="A mentor will be with you shortly. This ticket will auto-close after 24 hours of inactivity."

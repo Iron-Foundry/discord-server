@@ -122,9 +122,9 @@ class Transcript(BaseModel):
     def to_text(self) -> str:
         """Render the transcript as a plain-text log."""
         lines: list[str] = [
-            f"Ticket #{self.ticket_id:04d} — {self.ticket_type.replace('_', ' ').title()}",
+            f"Ticket #{self.ticket_id:04d} - {self.ticket_type.replace('_', ' ').title()}",
             f"Created:  {self.created_at.strftime('%Y-%m-%d %H:%M UTC')}",
-            f"Closed:   {self.closed_at.strftime('%Y-%m-%d %H:%M UTC') if self.closed_at else '—'}",
+            f"Closed:   {self.closed_at.strftime('%Y-%m-%d %H:%M UTC') if self.closed_at else '-'}",
             f"Duration: {self.get_duration()}",
             "=" * 60,
             "",
@@ -134,7 +134,7 @@ class Transcript(BaseModel):
             prefix = "[BOT]" if entry.author_is_bot else ""
             lines.append(f"[{ts}] {prefix}{entry.author_display_name}: {entry.content}")
             for att in entry.attachments:
-                lines.append(f"         📎 {att.filename} — {att.url}")
+                lines.append(f"         📎 {att.filename} - {att.url}")
         if self.staff_actions:
             lines += ["", "=" * 60, "Staff Actions", ""]
             for action in self.staff_actions:

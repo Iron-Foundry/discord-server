@@ -1,1 +1,1 @@
-"""Member management — role panels and auto-assign join roles."""
+"""Member management - role panels and auto-assign join roles."""

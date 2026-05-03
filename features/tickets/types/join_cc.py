@@ -45,7 +45,7 @@ class JoinCCTicket(TicketTypeConfig):
 
     def build_create_embed(self, record: TicketRecord) -> discord.Embed:
         embed = discord.Embed(
-            title=f"{self.emoji} Join Application — #{record.ticket_id:04d}",
+            title=f"{self.emoji} Join Application - #{record.ticket_id:04d}",
             color=self.color,
             timestamp=datetime.now(UTC),
         )

@@ -18,7 +18,7 @@ class PgActionLogRepository:
         self._factory = session_factory
 
     async def ensure_indexes(self) -> None:
-        """No-op — indexes are managed by Alembic migrations."""
+        """No-op - indexes are managed by Alembic migrations."""
         logger.info("PgActionLogRepository: ready")
 
     async def get_config(self, guild_id: int) -> ActionLogConfig | None:

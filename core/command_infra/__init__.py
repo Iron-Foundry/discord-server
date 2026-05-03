@@ -1,4 +1,4 @@
-"""Shared command infrastructure — checks, help system, handlers."""
+"""Shared command infrastructure - checks, help system, handlers."""
 
 from features.tickets.commands import TicketGroup, TicketTypeGroup
 

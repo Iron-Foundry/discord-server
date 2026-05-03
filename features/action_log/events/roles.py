@@ -83,7 +83,7 @@ def register(registrar: EventRegistrar) -> None:
         )
         embed.add_field(name="Role", value=after.mention, inline=True)
         embed.set_footer(text=f"Role ID: {after.id}")
-        logger.debug(f"ActionLog[roles]: role '{after.name}' updated — {lines}")
+        logger.debug(f"ActionLog[roles]: role '{after.name}' updated - {lines}")
         await service.post(LogCategory.ROLES, embed)
 
     registrar.add("on_guild_role_create", on_guild_role_create)

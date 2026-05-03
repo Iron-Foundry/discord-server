@@ -148,7 +148,7 @@ class ReopenSelect(discord.ui.Select):
         self._member = member
         options = [
             discord.SelectOption(
-                label=f"#{t.ticket_id:04d} — {t.ticket_type.replace('_', ' ').title()}",
+                label=f"#{t.ticket_id:04d} - {t.ticket_type.replace('_', ' ').title()}",
                 value=str(t.ticket_id),
                 description=f"Opened {t.created_at.strftime('%Y-%m-%d')}",
             )
@@ -192,7 +192,7 @@ class ReopenSelectView(discord.ui.View):
 def build_dm_menu_embed() -> discord.Embed:
     """Build the greeting embed shown at the top of the DM menu."""
     return discord.Embed(
-        title="Iron Foundry — Ticket Support",
+        title="Iron Foundry - Ticket Support",
         description=(
             "Use the buttons below to open a new ticket or reopen a previous one.\n\n"
             "Your ticket will be created in the Iron Foundry server."

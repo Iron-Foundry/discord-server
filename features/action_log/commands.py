@@ -138,7 +138,7 @@ class IgnoreGroup(
             tid = int(thread_id)
         except ValueError:
             await interaction.response.send_message(
-                "Invalid thread ID — must be a numeric snowflake.", ephemeral=True
+                "Invalid thread ID - must be a numeric snowflake.", ephemeral=True
             )
             return
         added = await self._service.add_ignore(tid, is_thread=True)
@@ -216,7 +216,7 @@ class UnignoreGroup(
             tid = int(thread_id)
         except ValueError:
             await interaction.response.send_message(
-                "Invalid thread ID — must be a numeric snowflake.", ephemeral=True
+                "Invalid thread ID - must be a numeric snowflake.", ephemeral=True
             )
             return
         removed = await self._service.remove_ignore(tid, is_thread=True)
@@ -263,7 +263,7 @@ class ActionLogGroup(
         config = await self._service.setup_forum(forum)
         thread_count = len(config.thread_ids)
         await interaction.followup.send(
-            f"Action log configured in {forum.mention} — {thread_count} threads ready.",
+            f"Action log configured in {forum.mention} - {thread_count} threads ready.",
             ephemeral=True,
         )
 

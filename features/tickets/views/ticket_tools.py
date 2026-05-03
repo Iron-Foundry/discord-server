@@ -20,7 +20,7 @@ class CloseReasonModal(discord.ui.Modal, title="Close Ticket"):
     )
     staff_note = discord.ui.TextInput(
         label="Staff Note (Internal)",
-        placeholder="Archived for future reference — not shown to the user.",
+        placeholder="Archived for future reference - not shown to the user.",
         style=discord.TextStyle.paragraph,
         required=False,
         max_length=1000,
@@ -110,7 +110,7 @@ class TicketToolsView(discord.ui.View):
             button.emoji = "❄️"
             await interaction.response.edit_message(view=self)
             await interaction.followup.send(
-                "Timeout unfrozen — 24h timer resumed.", ephemeral=True
+                "Timeout unfrozen - 24h timer resumed.", ephemeral=True
             )
         else:
             await self._service.freeze_timeout(ticket.ticket_id)
@@ -118,7 +118,7 @@ class TicketToolsView(discord.ui.View):
             button.emoji = "🔥"
             await interaction.response.edit_message(view=self)
             await interaction.followup.send(
-                "Timeout frozen — ticket won't auto-close.", ephemeral=True
+                "Timeout frozen - ticket won't auto-close.", ephemeral=True
             )
 
 

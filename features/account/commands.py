@@ -62,12 +62,12 @@ class AccountGroup(
         )
         embed.add_field(
             name="RSN",
-            value=rsn if rsn else "*Not linked — use `/account link`*",
+            value=rsn if rsn else "*Not linked - use `/account link`*",
             inline=False,
         )
         embed.add_field(
             name="RuneLite API Key",
-            value="✓ Active" if key else "*None — use `/userkey new`*",
+            value="✓ Active" if key else "*None - use `/userkey new`*",
             inline=True,
         )
         embed.add_field(

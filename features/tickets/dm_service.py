@@ -24,7 +24,7 @@ class DMTicketService(Service):
         self._ticket_service = ticket_service
 
     async def initialize(self) -> None:
-        """No-op — no async setup required."""
+        """No-op - no async setup required."""
         logger.info("DMTicketService initialised")
 
     async def handle_dm(self, message: discord.Message) -> None:

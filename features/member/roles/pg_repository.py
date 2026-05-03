@@ -18,7 +18,7 @@ class PgRolePanelRepository:
         self._factory = session_factory
 
     async def ensure_indexes(self) -> None:
-        """No-op — indexes are managed by Alembic migrations."""
+        """No-op - indexes are managed by Alembic migrations."""
         logger.info("PgRolePanelRepository: ready")
 
     async def save_panel(self, panel: RolePanel) -> None:

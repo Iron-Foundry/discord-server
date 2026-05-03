@@ -27,11 +27,11 @@ class PgTicketRepository:
         self._factory = session_factory
 
     async def ensure_indexes(self) -> None:
-        """No-op — indexes are managed by Alembic migrations."""
+        """No-op - indexes are managed by Alembic migrations."""
         logger.info("PgTicketRepository: ready")
 
     # -------------------------------------------------------------------------
-    # Counter — auto-increment ticket IDs
+    # Counter - auto-increment ticket IDs
     # -------------------------------------------------------------------------
 
     async def next_ticket_id(self) -> int:

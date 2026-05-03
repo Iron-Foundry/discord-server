@@ -113,7 +113,7 @@ class ActionLogService(Service):
             else:
                 new_thread, _ = await forum.create_thread(
                     name=label,
-                    content=f"Action log — **{label}**",
+                    content=f"Action log - **{label}**",
                 )
                 config.thread_ids[category.value] = new_thread.id
                 logger.info(f"ActionLog: created thread '{label}' ({new_thread.id})")

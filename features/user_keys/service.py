@@ -72,7 +72,7 @@ class UserKeyService(Service):
                 )
                 failed += 1
         logger.info(
-            "UserKeyService: guild member sync complete — ok={} failed={}", ok, failed
+            "UserKeyService: guild member sync complete - ok={} failed={}", ok, failed
         )
 
     async def register_member(self, member: discord.Member) -> None:

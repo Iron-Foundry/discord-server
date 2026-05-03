@@ -55,7 +55,7 @@ def register(registrar: EventRegistrar) -> None:
         embed.set_footer(text=f"Guild ID: {after.id}")
         if after.icon:
             embed.set_thumbnail(url=after.icon.url)
-        logger.debug(f"ActionLog[guild]: '{after.name}' updated — {lines}")
+        logger.debug(f"ActionLog[guild]: '{after.name}' updated - {lines}")
         await service.post(LogCategory.GUILD, embed)
 
     async def on_guild_emojis_update(

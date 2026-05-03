@@ -272,13 +272,13 @@ class TicketGroup(
             return tt is None or not tt.sensitive
 
         def _choice_name(t: TicketRecord) -> str:
-            name = f"#{t.ticket_id:04d} — {t.ticket_type.replace('_', ' ').title()}"
+            name = f"#{t.ticket_id:04d} - {t.ticket_type.replace('_', ' ').title()}"
             if caller_is_staff:
                 name += f" ({t.creator.display_name})"
                 if t.staff_note:
                     note = t.staff_note
                     note = note[:25] + "..." if len(note) > 25 else note
-                    name += f" — {note}"
+                    name += f" - {note}"
             return name
 
         return [
@@ -464,7 +464,7 @@ class TicketGroup(
             return
         await self._service.freeze_timeout(ticket.ticket_id)
         await interaction.response.send_message(
-            "⏸️ Timeout frozen — this ticket won't auto-close."
+            "⏸️ Timeout frozen - this ticket won't auto-close."
         )
 
     @app_commands.command(
@@ -486,7 +486,7 @@ class TicketGroup(
             return
         await self._service.unfreeze_timeout(ticket.ticket_id)
         await interaction.response.send_message(
-            "▶️ Timeout unfrozen — 24-hour timer resumed."
+            "▶️ Timeout unfrozen - 24-hour timer resumed."
         )
 
     # ------------------------------------------------------------------
@@ -539,7 +539,7 @@ class TicketGroup(
             )
 
         def _choice_name(t: TicketRecord) -> str:
-            name = f"#{t.ticket_id:04d} — {t.ticket_type.replace('_', ' ').title()}"
+            name = f"#{t.ticket_id:04d} - {t.ticket_type.replace('_', ' ').title()}"
             if caller_is_staff:
                 name += f" ({t.creator.display_name})"
             return name
@@ -564,7 +564,7 @@ class TicketGroup(
         tickets = await self._service.get_recent_tickets_by_user(user.id, limit=10)
 
         embed = discord.Embed(
-            title=f"Tickets — {user.display_name}",
+            title=f"Tickets - {user.display_name}",
             color=discord.Color.blurple(),
         )
 
@@ -575,7 +575,7 @@ class TicketGroup(
                 type_name = t.ticket_type.replace("_", " ").title()
                 created = discord.utils.format_dt(t.created_at, style="d")
                 embed.add_field(
-                    name=f"#{t.ticket_id:04d} — {type_name}",
+                    name=f"#{t.ticket_id:04d} - {type_name}",
                     value=f"Status: **{t.status.value.capitalize()}** | Opened: {created}",
                     inline=False,
                 )
@@ -867,7 +867,7 @@ class TicketTypeGroup(
             status = "✅ Enabled" if t.enabled else "⛔ Disabled"
             embed.add_field(
                 name=f"{t.emoji} {t.display_name}",
-                value=f"`{t.identifier}` — {status}\n{t.description}",
+                value=f"`{t.identifier}` - {status}\n{t.description}",
                 inline=False,
             )
         await interaction.response.send_message(embed=embed, ephemeral=True)

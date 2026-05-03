@@ -98,16 +98,16 @@ class RankupTicket(TicketTypeConfig):
     def build_create_embed(self, record: TicketRecord) -> discord.Embed:
         meta = record.metadata
         embed = discord.Embed(
-            title=f"{self.emoji} Rank Up Application — #{record.ticket_id:04d}",
+            title=f"{self.emoji} Rank Up Application - #{record.ticket_id:04d}",
             color=self.color,
             timestamp=datetime.now(UTC),
         )
         embed.add_field(name="Applicant", value=f"<@{record.creator.id}>", inline=True)
         embed.add_field(
-            name="Current Rank", value=meta.get("current_rank", "—"), inline=True
+            name="Current Rank", value=meta.get("current_rank", "-"), inline=True
         )
         embed.add_field(
-            name="Applying For", value=meta.get("target_rank", "—"), inline=True
+            name="Applying For", value=meta.get("target_rank", "-"), inline=True
         )
         embed.set_footer(
             text="This ticket will auto-close after 24 hours of inactivity."

@@ -52,7 +52,7 @@ def _build_stats_embed(
     }.get(period, period)
 
     embed = discord.Embed(
-        title=f"Ticket Stats — {display_name}",
+        title=f"Ticket Stats - {display_name}",
         color=discord.Color.blurple(),
     )
     embed.add_field(name="Period", value=period_label, inline=True)
@@ -115,7 +115,7 @@ def _build_leaderboard_embed(
         else:
             value = f"Tickets Closed: **{entry.tickets_closed}**"
         embed.add_field(
-            name=f"#{entry.rank} — {name}",
+            name=f"#{entry.rank} - {name}",
             value=value,
             inline=False,
         )
@@ -161,7 +161,7 @@ def _build_system_embed(stats: SystemStats, period: str) -> discord.Embed:
 
 
 class StatsView(discord.ui.View):
-    """Interactive view for /ticket stats — period select."""
+    """Interactive view for /ticket stats - period select."""
 
     def __init__(
         self,
@@ -203,7 +203,7 @@ class StatsView(discord.ui.View):
         chart: discord.File | None = None
         if stats is None:
             embed = discord.Embed(
-                title=f"Ticket Stats — {self._display_name}",
+                title=f"Ticket Stats - {self._display_name}",
                 description="No closed tickets found for this period.",
                 color=discord.Color.blurple(),
             )
@@ -226,7 +226,7 @@ class StatsView(discord.ui.View):
 
 
 class LeaderboardView(discord.ui.View):
-    """Interactive view for /ticket leaderboard — period select + metric select."""
+    """Interactive view for /ticket leaderboard - period select + metric select."""
 
     def __init__(
         self,
@@ -325,7 +325,7 @@ class LeaderboardView(discord.ui.View):
 
 
 class SystemStatsView(discord.ui.View):
-    """Interactive view for /ticket system — period select."""
+    """Interactive view for /ticket system - period select."""
 
     def __init__(self, service: TicketService, period: str = "all") -> None:
         super().__init__(timeout=300)

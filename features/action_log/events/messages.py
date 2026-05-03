@@ -20,7 +20,7 @@ def register(registrar: EventRegistrar) -> None:
         if before.author.bot or not before.guild:
             return
         if before.content == after.content:
-            return  # embed load — no real content change
+            return  # embed load - no real content change
 
         channel = before.channel
         parent_id = channel.parent_id if isinstance(channel, discord.Thread) else None

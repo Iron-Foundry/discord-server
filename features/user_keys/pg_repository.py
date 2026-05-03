@@ -19,7 +19,7 @@ class PgUserKeyRepository:
         self._factory = session_factory
 
     async def ensure_indexes(self) -> None:
-        """No-op — indexes are managed by Alembic migrations."""
+        """No-op - indexes are managed by Alembic migrations."""
         logger.info("PgUserKeyRepository: ready")
 
     async def get_by_user(self, discord_user_id: int) -> UserKey | None:

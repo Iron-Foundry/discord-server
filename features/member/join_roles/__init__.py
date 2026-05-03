@@ -1,1 +1,1 @@
-"""Join roles — auto-assign roles when a member joins."""
+"""Join roles - auto-assign roles when a member joins."""

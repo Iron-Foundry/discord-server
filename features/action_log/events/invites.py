@@ -59,7 +59,7 @@ def register(registrar: EventRegistrar) -> None:
         )
         if invite.temporary:
             embed.add_field(
-                name="Temporary", value="Yes — kicked when disconnected", inline=False
+                name="Temporary", value="Yes - kicked when disconnected", inline=False
             )
         logger.debug(f"ActionLog[invites]: invite {invite.code} created")
         await service.post(LogCategory.INVITES, embed)

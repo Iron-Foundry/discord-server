@@ -1,10 +1,10 @@
 """Service loading functions for the Foundry Discord bot.
 
 Loading order:
-  1. TicketService           — must load first (other services wire to it)
-  2. All independent services — loaded in parallel via asyncio.gather()
-  3. DMTicketService          — depends on TicketService, loaded after
-  4. Help command             — registered last so all services have added their entries
+  1. TicketService           - must load first (other services wire to it)
+  2. All independent services - loaded in parallel via asyncio.gather()
+  3. DMTicketService          - depends on TicketService, loaded after
+  4. Help command             - registered last so all services have added their entries
 """
 
 from __future__ import annotations

@@ -82,7 +82,7 @@ class TicketService(Service):
         self._rank_details_config: RankDetailsConfig | None = None
 
     # -------------------------------------------------------------------------
-    # Startup — restart recovery
+    # Startup - restart recovery
     # -------------------------------------------------------------------------
 
     async def initialize(self) -> None:
@@ -127,7 +127,7 @@ class TicketService(Service):
                 remaining = max(0.0, TICKET_TIMEOUT_SECONDS - elapsed)
                 if remaining == 0:
                     logger.info(
-                        f"Ticket #{record.ticket_id} timed out while offline — closing"
+                        f"Ticket #{record.ticket_id} timed out while offline - closing"
                     )
                     asyncio.create_task(self._auto_close(ticket))
                 else:
@@ -166,7 +166,7 @@ class TicketService(Service):
         channel = self.guild.get_channel(channel_id)
         if not isinstance(channel, discord.TextChannel):
             logger.warning(
-                "TicketService: panel channel not found — clearing stale config"
+                "TicketService: panel channel not found - clearing stale config"
             )
             await self.repo.clear_panel_config(self.guild.id)
             return
@@ -178,7 +178,7 @@ class TicketService(Service):
             self._panel_message = await channel.fetch_message(message_id)
         except discord.NotFound:
             logger.warning(
-                "TicketService: panel message not found — clearing stale config"
+                "TicketService: panel message not found - clearing stale config"
             )
             await self.repo.clear_panel_config(self.guild.id)
             return
@@ -238,7 +238,7 @@ class TicketService(Service):
         if len(existing) >= ticket_type.max_open_per_user:
             logger.debug(
                 f"create_ticket: {creator} already has {len(existing)} open "
-                f"'{type_id}' ticket(s) — rejecting"
+                f"'{type_id}' ticket(s) - rejecting"
             )
             return None
 
@@ -321,7 +321,7 @@ class TicketService(Service):
 
         try:
             logger.info(
-                f"Ticket #{ticket_id}: closing — closer={closer}, reason={reason!r}"
+                f"Ticket #{ticket_id}: closing - closer={closer}, reason={reason!r}"
             )
 
             await self._cancel_timeout(ticket_id)
@@ -329,7 +329,7 @@ class TicketService(Service):
             # Collect message history (skipped for sensitive tickets)
             if ticket.ticket_type.sensitive:
                 logger.info(
-                    f"Ticket #{ticket_id}: sensitive — skipping transcript collection"
+                    f"Ticket #{ticket_id}: sensitive - skipping transcript collection"
                 )
                 await ticket.close(closer, reason, note)
             else:
@@ -386,7 +386,7 @@ class TicketService(Service):
                 staff_note=note,
             )
 
-            # Delete the channel — transcript is already saved
+            # Delete the channel - transcript is already saved
             channel_name = ticket.channel.name
             try:
                 await ticket.channel.delete(
@@ -459,7 +459,7 @@ class TicketService(Service):
             # Post prior transcript file (skipped for sensitive tickets)
             if ticket_type.sensitive:
                 logger.info(
-                    f"Ticket #{ticket_id}: sensitive — skipping prior transcript post"
+                    f"Ticket #{ticket_id}: sensitive - skipping prior transcript post"
                 )
             else:
                 prior_transcript = await self.repo.get_transcript(ticket_id)

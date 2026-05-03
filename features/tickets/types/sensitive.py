@@ -7,7 +7,7 @@ from features.tickets.models.ticket import TicketTypeConfig, TicketTeam, TicketR
 
 class SensitiveTicket(TicketTypeConfig):
     """
-    Sensitive ticket — visible only to Senior Staff and Owners.
+    Sensitive ticket - visible only to Senior Staff and Owners.
     No creation modal; the creator explains the issue in the channel directly.
     """
 
@@ -92,7 +92,7 @@ class SensitiveTicket(TicketTypeConfig):
 
     def build_create_embed(self, record: TicketRecord) -> discord.Embed:
         embed = discord.Embed(
-            title=f"{self.emoji} Sensitive Ticket — #{record.ticket_id:04d}",
+            title=f"{self.emoji} Sensitive Ticket - #{record.ticket_id:04d}",
             description=(
                 "This ticket is only visible to Senior Staff and Owners.\n\n"
                 "Please describe your concern below. All information shared here is strictly confidential."

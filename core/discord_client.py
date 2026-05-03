@@ -65,7 +65,7 @@ class DiscordClient(discord.Client):
 
         database_url = self.config.get_variable(ConfigVars.DATABASE_URL)
         if not database_url:
-            logger.error("DATABASE_URL not set — no services will start")
+            logger.error("DATABASE_URL not set - no services will start")
             return
 
         await init_db(database_url)

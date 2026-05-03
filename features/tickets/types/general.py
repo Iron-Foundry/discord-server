@@ -45,7 +45,7 @@ class GeneralTicket(TicketTypeConfig):
 
     def build_create_embed(self, record: TicketRecord) -> discord.Embed:
         embed = discord.Embed(
-            title=f"{self.emoji} General Support — Ticket #{record.ticket_id:04d}",
+            title=f"{self.emoji} General Support - Ticket #{record.ticket_id:04d}",
             description=(
                 "Welcome! A staff member will be with you shortly.\n\n"
                 "Please describe your question or issue below."

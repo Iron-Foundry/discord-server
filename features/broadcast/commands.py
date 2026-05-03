@@ -83,7 +83,7 @@ class BroadcastGroup(
         await self._service.set_role(role.id)
         member_count = sum(1 for m in role.members if not m.bot)
         await interaction.followup.send(
-            f"Broadcast role set to {role.mention} — **{member_count}** eligible members.",
+            f"Broadcast role set to {role.mention} - **{member_count}** eligible members.",
             ephemeral=True,
         )
 
@@ -105,7 +105,7 @@ class BroadcastGroup(
             return
         member_count = sum(1 for m in role.members if not m.bot)
         await interaction.response.send_message(
-            f"Broadcast role: {role.mention} — **{member_count}** eligible members.",
+            f"Broadcast role: {role.mention} - **{member_count}** eligible members.",
             ephemeral=True,
         )
 

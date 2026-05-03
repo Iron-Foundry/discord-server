@@ -111,7 +111,7 @@ def register(registrar: EventRegistrar) -> None:
         )
         embed.add_field(name="Channel", value=after.mention, inline=True)
         embed.set_footer(text=f"Channel ID: {after.id}")
-        logger.debug(f"ActionLog[channels]: #{after.name} updated — {lines}")
+        logger.debug(f"ActionLog[channels]: #{after.name} updated - {lines}")
         await service.post(LogCategory.CHANNELS, embed)
 
     async def on_stage_instance_create(stage: discord.StageInstance) -> None:
@@ -131,7 +131,7 @@ def register(registrar: EventRegistrar) -> None:
             inline=True,
         )
         embed.set_footer(text=f"Stage ID: {stage.id}")
-        logger.debug(f"ActionLog[channels]: stage started — '{stage.topic}'")
+        logger.debug(f"ActionLog[channels]: stage started - '{stage.topic}'")
         await service.post(LogCategory.CHANNELS, embed)
 
     async def on_stage_instance_update(
@@ -161,7 +161,7 @@ def register(registrar: EventRegistrar) -> None:
         )
         embed.add_field(name="Channel", value=f"<#{after.channel_id}>", inline=True)
         embed.set_footer(text=f"Stage ID: {after.id}")
-        logger.debug(f"ActionLog[channels]: stage updated — '{after.topic}'")
+        logger.debug(f"ActionLog[channels]: stage updated - '{after.topic}'")
         await service.post(LogCategory.CHANNELS, embed)
 
     async def on_stage_instance_delete(stage: discord.StageInstance) -> None:
@@ -176,7 +176,7 @@ def register(registrar: EventRegistrar) -> None:
         embed.add_field(name="Topic", value=stage.topic, inline=False)
         embed.add_field(name="Channel", value=f"<#{stage.channel_id}>", inline=True)
         embed.set_footer(text=f"Stage ID: {stage.id}")
-        logger.debug(f"ActionLog[channels]: stage ended — '{stage.topic}'")
+        logger.debug(f"ActionLog[channels]: stage ended - '{stage.topic}'")
         await service.post(LogCategory.CHANNELS, embed)
 
     registrar.add("on_guild_channel_create", on_guild_channel_create)

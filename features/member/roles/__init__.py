@@ -1,1 +1,1 @@
-"""Role panel system — self-assign role menus."""
+"""Role panel system - self-assign role menus."""
