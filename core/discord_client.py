@@ -159,6 +159,8 @@ class DiscordClient(discord.Client):
         """Shut down the client and release the PG connection pool."""
         from core.db import close_db
 
+        if self.ticket_service and self.ticket_service._http_client:
+            await self.ticket_service._http_client.aclose()
         await close_db()
         await super().close()
 

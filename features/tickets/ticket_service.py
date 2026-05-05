@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from dataclasses import dataclass
 from datetime import datetime, UTC
 from typing import Any, cast
 
 import discord
+import httpx
 from loguru import logger
 
 from features.tickets.handlers.pg_repository import PgTicketRepository
@@ -80,6 +82,10 @@ class TicketService(Service):
         self._panel_category: discord.CategoryChannel | None = None
         self._closed_tickets: dict[int, Ticket] = {}
         self._rank_details_config: RankDetailsConfig | None = None
+        self._uploadthing_secret: str | None = os.getenv("UPLOADTHING_SECRET")
+        self._http_client: httpx.AsyncClient | None = (
+            httpx.AsyncClient() if self._uploadthing_secret else None
+        )
 
     # -------------------------------------------------------------------------
     # Startup - restart recovery
@@ -335,10 +341,23 @@ class TicketService(Service):
             else:
                 logger.debug(f"Ticket #{ticket_id}: collecting message history")
                 await ticket.collect_messages()
-                await ticket.close(closer, reason, note)
                 logger.debug(
                     f"Ticket #{ticket_id}: {len(ticket.transcript.entries)} messages collected"
                 )
+                if self._http_client and self._uploadthing_secret:
+                    from features.tickets.attachment_uploader import (
+                        upload_transcript_attachments,
+                    )
+
+                    replaced = await upload_transcript_attachments(
+                        ticket.transcript,
+                        self._http_client,
+                        self._uploadthing_secret,
+                    )
+                    logger.info(
+                        f"Ticket #{ticket_id}: uploaded {replaced} attachment(s) to UploadThing"
+                    )
+                await ticket.close(closer, reason, note)
 
             # DM the ticket creator
             try:
