@@ -4,6 +4,7 @@ import io
 
 import httpx
 from upyloadthing import AsyncUTApi
+from upyloadthing.schemas import UTApiOptions
 
 
 async def upload_file(
@@ -21,7 +22,7 @@ async def upload_file(
     file_obj = io.BytesIO(data)
     file_obj.name = filename
 
-    api = AsyncUTApi(token=secret)
+    api = AsyncUTApi(UTApiOptions(token=secret))
     results = await api.upload_files(file_obj, acl="public-read", content_disposition="inline")
 
     if not results:
