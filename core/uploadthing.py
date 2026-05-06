@@ -1,19 +1,9 @@
-"""UploadThing v7 REST API wrapper."""
+"""UploadThing upload wrapper using upyloadthing SDK."""
 
-import base64
-import json
-import os
+import io
 
 import httpx
-
-
-def _extract_api_key(secret: str) -> str:
-    """Extract raw sk_live_... key from a base64-encoded UploadThing token or return as-is."""
-    try:
-        decoded = json.loads(base64.b64decode(secret + "=="))
-        return decoded["apiKey"]
-    except Exception:
-        return secret
+from upyloadthing import AsyncUTApi
 
 
 async def upload_file(
@@ -23,52 +13,19 @@ async def upload_file(
     data: bytes,
     content_type: str,
 ) -> str:
-    """Upload bytes to UploadThing v7 via prepareUpload + S3 multipart POST.
+    """Upload bytes to UploadThing.
 
-    Returns the permanent file URL (fileUrl from prepareUpload response).
-    Raises httpx.HTTPStatusError on non-2xx from either request.
+    Returns the permanent file URL.
+    Raises on failure.
     """
-    callback_url = os.getenv("FRONTEND_URL", "https://ironfoundry.cc").split(",")[0].strip()
-    api_key = _extract_api_key(secret)
+    file_obj = io.BytesIO(data)
+    file_obj.name = filename
 
-    # Step 1: prepare upload - get S3 presigned POST fields + permanent URL
-    prepare_resp = await client.post(
-        "https://api.uploadthing.com/v7/prepareUpload",
-        headers={
-            "x-uploadthing-api-key": api_key,
-            "content-type": "application/json",
-        },
-        json={
-            "files": [{"name": filename, "size": len(data)}],
-            "callbackUrl": callback_url,
-            "callbackSlug": "ticketImages",
-            "contentDisposition": "inline",
-            "acl": "public-read",
-        },
-    )
-    prepare_resp.raise_for_status()
+    api = AsyncUTApi(token=secret)
+    results = await api.upload_files(file_obj, acl="public-read", content_disposition="inline")
 
-    raw = prepare_resp.json()
-    # Response may be a list (one entry per file) or wrapped in {"data": [...]}
-    if isinstance(raw, list):
-        file_data = raw[0]
-    elif "data" in raw:
-        file_data = raw["data"][0]
-    else:
-        file_data = raw
+    if not results:
+        raise RuntimeError("UploadThing returned no results")
 
-    s3_url: str = file_data["url"]
-    s3_fields: dict[str, str] = file_data["fields"]
-    permanent_url: str = file_data["fileUrl"]
-
-    # Step 2: POST to S3 as multipart/form-data
-    # S3 presigned POST requires all signing fields before the file field
-    multipart: list[tuple[str, tuple[None | str, bytes | str]]] = [
-        (k, (None, v.encode())) for k, v in s3_fields.items()
-    ]
-    multipart.append(("file", (filename, data)))
-
-    upload_resp = await client.post(s3_url, files=multipart)  # type: ignore[arg-type]
-    upload_resp.raise_for_status()
-
-    return permanent_url
+    result = results[0] if isinstance(results, list) else results
+    return result.url
