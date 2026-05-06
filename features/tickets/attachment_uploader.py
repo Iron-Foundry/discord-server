@@ -27,20 +27,21 @@ async def upload_transcript_attachments(
             if not is_image(att.content_type, att.filename):
                 continue
 
+            webp_filename = (
+                f"{transcript.ticket_type}-{transcript.ticket_id}-{img_index:03d}.webp"
+            )
+            img_index += 1
+
             try:
-                dl = await http_client.get(att.url)
+                dl = await http_client.get(att.url, follow_redirects=True)
                 if dl.status_code != 200:
                     logger.warning(
                         f"Ticket #{transcript.ticket_id}: download failed "
                         f"({dl.status_code}) for {att.filename}, skipping"
                     )
-                    img_index += 1
                     continue
 
                 webp_data = to_webp(dl.content)
-                webp_filename = (
-                    f"{transcript.ticket_type}-{transcript.ticket_id}-{img_index:03d}.webp"
-                )
 
                 permanent_url = await upload_file(
                     http_client,
@@ -54,13 +55,14 @@ async def upload_transcript_attachments(
                 att.content_type = "image/webp"
                 att.filename = webp_filename
                 replaced += 1
+                logger.debug(
+                    f"Ticket #{transcript.ticket_id}: uploaded {webp_filename} -> {permanent_url}"
+                )
 
             except Exception as e:
                 logger.warning(
                     f"Ticket #{transcript.ticket_id}: failed to upload "
-                    f"{att.filename}: {e}"
+                    f"{att.filename} as {webp_filename}: {e}"
                 )
-            finally:
-                img_index += 1
 
     return replaced

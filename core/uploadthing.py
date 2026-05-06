@@ -1,5 +1,7 @@
 """UploadThing v7 REST API wrapper."""
 
+import os
+
 import httpx
 
 
@@ -10,28 +12,51 @@ async def upload_file(
     data: bytes,
     content_type: str,
 ) -> str:
-    """Upload bytes to UploadThing v7. Returns permanent file URL.
+    """Upload bytes to UploadThing v7 via prepareUpload + S3 multipart POST.
 
+    Returns the permanent file URL (fileUrl from prepareUpload response).
     Raises httpx.HTTPStatusError on non-2xx from either request.
     """
-    # Step 1: request presigned upload URL
-    presign_resp = await client.post(
-        "https://api.uploadthing.com/v7/uploadFiles",
-        headers={"x-uploadthing-api-key": secret},
-        json={"files": [{"name": filename, "size": len(data), "type": content_type}]},
-    )
-    presign_resp.raise_for_status()
-    file_data = presign_resp.json()["data"][0]
+    callback_url = os.getenv("FRONTEND_URL", "https://ironfoundry.cc").split(",")[0].strip()
 
-    presigned_url: str = file_data["url"]
+    # Step 1: prepare upload - get S3 presigned POST fields + permanent URL
+    prepare_resp = await client.post(
+        "https://api.uploadthing.com/v7/prepareUpload",
+        headers={
+            "x-uploadthing-api-key": secret,
+            "content-type": "application/json",
+        },
+        json={
+            "files": [{"name": filename, "size": len(data)}],
+            "callbackUrl": callback_url,
+            "callbackSlug": "ticketImages",
+            "contentDisposition": "inline",
+            "acl": "public-read",
+        },
+    )
+    prepare_resp.raise_for_status()
+
+    raw = prepare_resp.json()
+    # Response may be a list (one entry per file) or wrapped in {"data": [...]}
+    if isinstance(raw, list):
+        file_data = raw[0]
+    elif "data" in raw:
+        file_data = raw["data"][0]
+    else:
+        file_data = raw
+
+    s3_url: str = file_data["url"]
+    s3_fields: dict[str, str] = file_data["fields"]
     permanent_url: str = file_data["fileUrl"]
 
-    # Step 2: PUT file bytes to presigned URL
-    put_resp = await client.put(
-        presigned_url,
-        content=data,
-        headers={"Content-Type": content_type},
-    )
-    put_resp.raise_for_status()
+    # Step 2: POST to S3 as multipart/form-data
+    # S3 presigned POST requires all signing fields before the file field
+    multipart: list[tuple[str, tuple[None | str, bytes | str]]] = [
+        (k, (None, v.encode())) for k, v in s3_fields.items()
+    ]
+    multipart.append(("file", (filename, data)))
+
+    upload_resp = await client.post(s3_url, files=multipart)  # type: ignore[arg-type]
+    upload_resp.raise_for_status()
 
     return permanent_url
