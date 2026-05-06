@@ -1,8 +1,19 @@
 """UploadThing v7 REST API wrapper."""
 
+import base64
+import json
 import os
 
 import httpx
+
+
+def _extract_api_key(secret: str) -> str:
+    """Extract raw sk_live_... key from a base64-encoded UploadThing token or return as-is."""
+    try:
+        decoded = json.loads(base64.b64decode(secret + "=="))
+        return decoded["apiKey"]
+    except Exception:
+        return secret
 
 
 async def upload_file(
@@ -18,12 +29,13 @@ async def upload_file(
     Raises httpx.HTTPStatusError on non-2xx from either request.
     """
     callback_url = os.getenv("FRONTEND_URL", "https://ironfoundry.cc").split(",")[0].strip()
+    api_key = _extract_api_key(secret)
 
     # Step 1: prepare upload - get S3 presigned POST fields + permanent URL
     prepare_resp = await client.post(
         "https://api.uploadthing.com/v7/prepareUpload",
         headers={
-            "x-uploadthing-api-key": secret,
+            "x-uploadthing-api-key": api_key,
             "content-type": "application/json",
         },
         json={
