@@ -39,7 +39,7 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
     )
     description = discord.ui.TextInput(
         label="Description (optional)",
-        placeholder="Requirements, notes…",
+        placeholder="Requirements, notes...",
         style=discord.TextStyle.paragraph,
         max_length=300,
         required=False,
@@ -73,17 +73,15 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
         vibe = _parse_vibe(self.vibe.value)
 
         if ping_roles:
-            view = _PingSelectView(
-                service=self._service,
-                activity=activity,
-                description=description,
-                max_size=max_size,
-                vibe=vibe,
-                ping_roles=ping_roles,
-            )
             await interaction.response.send_message(
-                "Select roles to ping (optional):",
-                view=view,
+                view=_PingSelectLayout(
+                    service=self._service,
+                    activity=activity,
+                    description=description,
+                    max_size=max_size,
+                    vibe=vibe,
+                    ping_roles=ping_roles,
+                ),
                 ephemeral=True,
             )
         else:
@@ -98,9 +96,9 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
             )
 
 
-# ── Ping-role select ──────────────────────────────────────────────────────────
+# ── Ping-role select (Components V2) ─────────────────────────────────────────
 
-class _PingSelectView(discord.ui.View):
+class _PingSelectLayout(discord.ui.LayoutView):
     """Ephemeral follow-up letting the leader pick which roles to ping."""
 
     def __init__(
@@ -128,33 +126,40 @@ class _PingSelectView(discord.ui.View):
             )
             for r in ping_roles[:25]
         ]
+
         select = discord.ui.Select(
-            placeholder="Choose roles to ping…",
+            placeholder="Choose roles to ping...",
             options=options,
             min_values=0,
             max_values=len(options),
             custom_id="party_ping_select",
         )
         select.callback = self._on_select
-        self.add_item(select)
 
-        confirm = discord.ui.Button(
+        confirm_btn = discord.ui.Button(
             label="Create Party",
             style=discord.ButtonStyle.primary,
             custom_id="party_ping_confirm",
         )
-        confirm.callback = self._on_confirm
-        self.add_item(confirm)
+        confirm_btn.callback = self._on_confirm
 
-    async def _on_select(
-        self, interaction: discord.Interaction
-    ) -> None:
+        self.add_item(
+            discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content="Select roles to ping (optional):"
+                ),
+                discord.ui.ActionRow(select),
+                discord.ui.ActionRow(confirm_btn),
+            )
+        )
+
+    async def _on_select(self, interaction: discord.Interaction) -> None:
         self._selected = interaction.data.get("values", [])  # type: ignore[assignment]
         await interaction.response.defer()
 
-    async def _on_confirm(
-        self, interaction: discord.Interaction
-    ) -> None:
+    async def _on_confirm(self, interaction: discord.Interaction) -> None:
+        # Edit ephemeral in place so the select view is replaced by status
+        await interaction.response.defer()
         await _create_and_respond(
             interaction=interaction,
             service=self._service,
@@ -163,6 +168,7 @@ class _PingSelectView(discord.ui.View):
             max_size=self._max_size,
             vibe=self._vibe,
             ping_role_ids=self._selected,
+            use_edit=True,
         )
 
 
@@ -177,18 +183,18 @@ async def _create_and_respond(
     max_size: int,
     vibe: str,
     ping_role_ids: list[str],
+    use_edit: bool = False,
 ) -> None:
     """Create the party in DB, refresh the panel, reply ephemerally."""
+    from features.parties.views.panel import _StatusLayout
+
     user = interaction.user
     user_id = str(user.id)
-    username = user.display_name
-
-    # Look up RSN from DB
     rsn = await service.repo.get_user_rsn(user_id)
 
     party = await service.repo.create_party(
         leader_id=user_id,
-        leader_username=username,
+        leader_username=user.display_name,
         leader_rsn=rsn,
         activity=activity,
         description=description,
@@ -199,10 +205,7 @@ async def _create_and_respond(
     )
 
     await service.refresh_panel()
-
-    logger.info(
-        "CreateFlow: {} created party {} ({})", user, party.id, activity
-    )
+    logger.info("CreateFlow: {} created party {} ({})", user, party.id, activity)
 
     pings = (
         " ".join(f"<@&{rid}>" for rid in ping_role_ids)
@@ -210,13 +213,14 @@ async def _create_and_respond(
         else ""
     )
     msg = (
-        f"✅ **{activity}** created! Hub code: `{party.hub_code}`\n"
+        f"**{activity}** created! Hub code: `{party.hub_code}`\n"
         "Manage your party fully at ironfoundry.cc/parties."
     )
     if pings:
         msg += f"\n{pings}"
 
-    if interaction.response.is_done():
-        await interaction.edit_original_response(content=msg, view=None)
+    status = _StatusLayout(msg)
+    if use_edit:
+        await interaction.edit_original_response(view=status)
     else:
-        await interaction.response.send_message(msg, ephemeral=True)
+        await interaction.response.send_message(view=status, ephemeral=True)

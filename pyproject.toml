@@ -19,6 +19,7 @@ dependencies = [
     "pytest>=9.0.3",
     "sqlalchemy[asyncio]>=2.0.49",
     "upyloadthing>=0.2.1",
+    "valkey[asyncio]>=6.1.1",
     "xkcdpass>=1.30.0",
 ]
 

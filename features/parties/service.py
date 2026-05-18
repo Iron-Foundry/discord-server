@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import os
 
 import discord
@@ -10,7 +12,7 @@ from loguru import logger
 
 from core.service_base import Service
 from features.parties.pg_repository import PgPartyRepository
-from features.parties.views.panel import PartyPanelView, build_panel_embed
+from features.parties.views.panel import build_panel_layout
 
 SITE_URL = (
     os.getenv("FRONTEND_URL", "https://ironfoundry.cc")
@@ -18,8 +20,22 @@ SITE_URL = (
     .strip()
     .rstrip("/")
 )
-_REFRESH_INTERVAL = 30  # seconds
+_REFRESH_INTERVAL = 2.5  # seconds
 _ALLOWED_MENTIONS = discord.AllowedMentions(roles=True)
+
+
+def _state_hash(parties: list) -> str:
+    """Stable hash of all display-relevant party state."""
+    parts: list[str] = []
+    for p in parties:
+        member_ids = ",".join(sorted(m.user_id for m in p.members))
+        scheduled = p.scheduled_at.isoformat() if p.scheduled_at else ""
+        parts.append(
+            f"{p.id}:{p.status}:{p.activity}:{p.description}:"
+            f"{p.vibe}:{p.max_size}:{p.expires_at.isoformat()}:"
+            f"{scheduled}:{member_ids}"
+        )
+    return hashlib.md5("|".join(parts).encode()).hexdigest()
 
 
 class PartyService(Service):
@@ -37,6 +53,8 @@ class PartyService(Service):
         self._panel_message: discord.Message | None = None
         self._panel_channel: discord.TextChannel | None = None
         self._refresh_task: asyncio.Task | None = None
+        self._notify_task: asyncio.Task | None = None
+        self._last_state_hash: str | None = None
 
     @property
     def repo(self) -> PgPartyRepository:
@@ -53,11 +71,78 @@ class PartyService(Service):
         """No-op - panel recovery requires the live guild cache."""
 
     async def post_ready(self) -> None:
-        """Recover the panel and start the periodic refresh task."""
+        """Recover the panel and start background tasks."""
         await self._recover_panel()
         self._refresh_task = asyncio.create_task(
             self._periodic_refresh(), name="party-panel-refresh"
         )
+        self._notify_task = asyncio.create_task(
+            self._party_notify_subscriber(), name="party-notify-subscriber"
+        )
+
+    # ── DM notifications ──────────────────────────────────────────────────
+
+    async def notify_members(
+        self,
+        party: object,
+        message: str,
+        *,
+        exclude_user_id: str | None = None,
+    ) -> None:
+        """DM every party member, optionally skipping one user."""
+        for member in party.members:  # type: ignore[attr-defined]
+            if exclude_user_id and member.user_id == exclude_user_id:
+                continue
+            await self._dm_safe(member.user_id, message)
+
+    async def _dm_safe(self, user_id: str, content: str) -> None:
+        try:
+            user = await self._client.fetch_user(int(user_id))
+            await user.send(content)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException) as exc:
+            logger.debug(
+                "PartyService: could not DM user {} - {}", user_id, exc
+            )
+
+    async def _party_notify_subscriber(self) -> None:
+        from valkey.asyncio import Valkey as ValkeyClient
+
+        valkey_uri = os.getenv("VALKEY_URI", "redis://localhost:6379")
+        while True:
+            client: ValkeyClient = ValkeyClient.from_url(
+                valkey_uri, socket_timeout=None
+            )
+            try:
+                async with client.pubsub() as ps:
+                    await ps.subscribe("foundry:party_notify")
+                    logger.info(
+                        "PartyService: subscribed to foundry:party_notify"
+                    )
+                    async for raw in ps.listen():
+                        if raw["type"] != "message":
+                            continue
+                        try:
+                            data = json.loads(raw["data"])
+                            user_ids: list[str] = data.get("user_ids", [])
+                            message: str = data.get("message", "")
+                            for uid in user_ids:
+                                await self._dm_safe(uid, message)
+                        except Exception as exc:
+                            logger.warning(
+                                "PartyService: notify subscriber error - {}",
+                                exc,
+                            )
+            except asyncio.CancelledError:
+                logger.info("PartyService: notify subscriber shutting down")
+                await client.aclose()
+                return
+            except Exception as exc:
+                logger.warning(
+                    "PartyService: notify subscriber lost connection ({}), reconnecting in 5s",
+                    exc,
+                )
+                await client.aclose()
+                await asyncio.sleep(5)
 
     async def _periodic_refresh(self) -> None:
         while True:
@@ -77,14 +162,15 @@ class PartyService(Service):
 
     async def setup_panel(self, channel: discord.TextChannel) -> None:
         """Post a fresh panel in *channel* and persist the config."""
-        parties, ping_roles = await self._fetch_state()
-        embed, _, _ = build_panel_embed(parties, ping_roles, 0, self._guild)
-        view = PartyPanelView(self, parties, ping_roles, 0, SITE_URL)
+        parties, _ = await self._fetch_state()
+        layout = build_panel_layout(parties, SITE_URL, self)
 
         self._panel_channel = channel
         self._panel_message = await channel.send(
-            embed=embed, view=view, allowed_mentions=_ALLOWED_MENTIONS
+            view=layout,
+            allowed_mentions=_ALLOWED_MENTIONS,
         )
+        self._last_state_hash = _state_hash(parties)
         await self._repo.save_panel_config(
             self._guild.id, channel.id, self._panel_message.id
         )
@@ -95,16 +181,22 @@ class PartyService(Service):
         )
 
     async def refresh_panel(self) -> None:
-        """Edit the panel message to reflect current party state."""
+        """Edit the panel message only when party state has changed."""
         if not self._panel_message:
+            if isinstance(self._panel_channel, discord.TextChannel):
+                await self.setup_panel(self._panel_channel)
             return
-        parties, ping_roles = await self._fetch_state()
-        embed, _, _ = build_panel_embed(parties, ping_roles, 0, self._guild)
-        view = PartyPanelView(self, parties, ping_roles, 0, SITE_URL)
+        parties, _ = await self._fetch_state()
+        new_hash = _state_hash(parties)
+        if new_hash == self._last_state_hash:
+            return
+        layout = build_panel_layout(parties, SITE_URL, self)
         try:
             await self._panel_message.edit(
-                embed=embed, view=view, allowed_mentions=_ALLOWED_MENTIONS
+                view=layout,
+                allowed_mentions=_ALLOWED_MENTIONS,
             )
+            self._last_state_hash = new_hash
         except discord.NotFound:
             logger.warning(
                 "PartyService: panel message deleted - recreating in #{}",
@@ -113,9 +205,28 @@ class PartyService(Service):
             channel = self._panel_channel
             self._panel_message = None
             self._panel_channel = None
+            self._last_state_hash = None
             await self._repo.clear_panel_config(self._guild.id)
             if isinstance(channel, discord.TextChannel):
                 await self.setup_panel(channel)
+        except discord.HTTPException as exc:
+            if exc.status == 400:
+                # Legacy embed message cannot be upgraded to V2 in place
+                logger.info(
+                    "PartyService: upgrading legacy panel to Components V2 in #{}",
+                    self._panel_channel.name if self._panel_channel else "?",
+                )
+                try:
+                    await self._panel_message.delete()
+                except discord.NotFound:
+                    pass
+                self._panel_message = None
+                self._last_state_hash = None
+                await self._repo.clear_panel_config(self._guild.id)
+                if isinstance(self._panel_channel, discord.TextChannel):
+                    await self.setup_panel(self._panel_channel)
+            else:
+                raise
 
     async def _recover_panel(self) -> None:
         """Recover the panel on restart, recreating it if the message is gone."""

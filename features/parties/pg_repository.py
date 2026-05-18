@@ -87,6 +87,22 @@ class PgPartyRepository:
             )
             return result.scalar_one_or_none()
 
+    async def get_user_active_parties(self, user_id: str) -> list[PartyDB]:
+        """Return all active parties the user belongs to (as leader or member)."""
+        async with self._factory() as session:
+            result = await session.execute(
+                _with_members(
+                    select(PartyDB)
+                    .join(
+                        PartyMemberDB,
+                        (PartyMemberDB.party_id == PartyDB.id)
+                        & (PartyMemberDB.user_id == user_id),
+                    )
+                    .where(PartyDB.status != "closed")
+                )
+            )
+            return list(result.scalars().all())
+
     async def add_member(
         self,
         party_id: str,
@@ -212,6 +228,82 @@ class PgPartyRepository:
             await session.commit()
             await session.refresh(party, attribute_names=["members"])
             logger.info("PartyRepository: created party {} ({})", party_id, activity)
+            return party
+
+    async def remove_member(
+        self, party_id: str, user_id: str
+    ) -> PartyDB | None:
+        """Remove a member from a party. Reopens the party if it was full."""
+        from sqlalchemy import delete as sql_delete
+
+        async with self._factory() as session:
+            result = await session.execute(
+                _with_members(
+                    select(PartyDB).where(PartyDB.id == party_id)
+                )
+            )
+            party = result.scalar_one_or_none()
+            if not party or party.status == "closed":
+                return None
+            await session.execute(
+                sql_delete(PartyMemberDB).where(
+                    PartyMemberDB.party_id == party_id,
+                    PartyMemberDB.user_id == user_id,
+                )
+            )
+            await session.flush()
+            await session.refresh(party, attribute_names=["members"])
+            if party.status == "full" and len(party.members) < party.max_size:
+                party.status = "open"
+            await session.commit()
+            logger.info(
+                "PartyRepository: {} left party {}", user_id, party_id
+            )
+            return party
+
+    async def abdicate_and_leave(
+        self,
+        party_id: str,
+        old_leader_id: str,
+        new_leader_id: str,
+    ) -> PartyDB | None:
+        """Transfer leadership to new_leader, remove old leader from members."""
+        from sqlalchemy import delete as sql_delete
+
+        async with self._factory() as session:
+            result = await session.execute(
+                _with_members(
+                    select(PartyDB).where(PartyDB.id == party_id)
+                )
+            )
+            party = result.scalar_one_or_none()
+            if not party or party.status == "closed":
+                return None
+            new_leader = next(
+                (m for m in party.members if m.user_id == new_leader_id), None
+            )
+            if not new_leader:
+                return None
+            party.leader_id = new_leader_id
+            party.leader_username = new_leader.username
+            party.leader_rsn = new_leader.rsn
+            await session.execute(
+                sql_delete(PartyMemberDB).where(
+                    PartyMemberDB.party_id == party_id,
+                    PartyMemberDB.user_id == old_leader_id,
+                )
+            )
+            await session.flush()
+            await session.refresh(party, attribute_names=["members"])
+            if party.status == "full" and len(party.members) < party.max_size:
+                party.status = "open"
+            await session.commit()
+            logger.info(
+                "PartyRepository: {} abdicated to {} in party {}",
+                old_leader_id,
+                new_leader_id,
+                party_id,
+            )
             return party
 
     async def close_party(self, party_id: str) -> PartyDB | None:

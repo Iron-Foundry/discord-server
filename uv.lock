@@ -237,6 +237,7 @@ dependencies = [
     { name = "pytest" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "upyloadthing" },
+    { name = "valkey" },
     { name = "xkcdpass" },
 ]
 
@@ -261,6 +262,7 @@ requires-dist = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.49" },
     { name = "upyloadthing", specifier = ">=0.2.1" },
+    { name = "valkey", extras = ["asyncio"], specifier = ">=6.1.1" },
     { name = "xkcdpass", specifier = ">=1.30.0" },
 ]
 
@@ -787,6 +789,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c1/d1/f8be9d5341e8480843007dab7e7149fc89d52b0b249e1d483bd576159aee/upyloadthing-0.2.1.tar.gz", hash = "sha256:248d8c47728912131822dd0890dd094bbbf26ff8630ba3a0febd18c44975507b", size = 9585, upload-time = "2025-02-15T01:41:33.123Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ce/d1/949fb7b040971b05d7d2b917567dbe6bea626527a6d6ec6e9ae43aaa9b0d/upyloadthing-0.2.1-py3-none-any.whl", hash = "sha256:d9438da3008225ec19d11a13d4d8900fb27e946c8cce2ac56e24bef6bc9514ec", size = 12699, upload-time = "2025-02-15T01:41:29.49Z" },
+]
+
+[[package]]
+name = "valkey"
+version = "6.1.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c3/ee/7fd930fc712275084722ddd464a0ea296abdb997d2da396320507968daeb/valkey-6.1.1.tar.gz", hash = "sha256:5880792990c6c2b5eb604a5ed5f98f300880b6dd92d123819b66ed54bb259731", size = 4601372, upload-time = "2025-08-11T06:41:10.63Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d0/a2/252afa4da08c714460f49e943070f86a02931f99f886182765194002fe33/valkey-6.1.1-py3-none-any.whl", hash = "sha256:e2691541c6e1503b53c714ad9a35551ac9b7c0bbac93865f063dbc859a46de92", size = 259474, upload-time = "2025-08-11T06:41:08.769Z" },
 ]
 
 [[package]]
