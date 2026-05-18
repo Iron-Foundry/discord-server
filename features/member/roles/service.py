@@ -162,10 +162,11 @@ class RoleService(Service):
         return True
 
     async def refresh_panel(self, panel_id: str) -> bool:
-        """Force-sync a panel message with current state."""
-        panel = self._panels.get(panel_id)
+        """Force-sync a panel message with current DB state."""
+        panel = await self._repo.get_panel(panel_id)
         if not panel:
             return False
+        self._panels[panel.panel_id] = panel
         await self._refresh_panel(panel)
         return True
 
@@ -320,10 +321,12 @@ class RoleService(Service):
     # ------------------------------------------------------------------
 
     async def refresh_all_panels(self) -> int:
-        """Refresh all panels. Returns count of panels refreshed."""
-        for panel in self._panels.values():
+        """Refresh all panels from current DB state. Returns count refreshed."""
+        panels = await self._repo.get_all_panels(self._guild.id)
+        for panel in panels:
+            self._panels[panel.panel_id] = panel
             await self._refresh_panel(panel)
-        return len(self._panels)
+        return len(panels)
 
     async def _refresh_panel(self, panel: RolePanel) -> None:
         """Edit the panel message to reflect current state."""
