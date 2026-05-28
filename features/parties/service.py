@@ -154,15 +154,13 @@ class PartyService(Service):
 
     # ── Panel management ──────────────────────────────────────────────────
 
-    async def _fetch_state(self) -> tuple[list, list[dict]]:
-        """Return (parties, ping_roles) for building the panel."""
-        parties = await self._repo.get_active_parties()
-        ping_roles = await self._repo.get_ping_roles()
-        return parties, ping_roles
+    async def _fetch_state(self) -> list:
+        """Return active parties for building the panel."""
+        return await self._repo.get_active_parties()
 
     async def setup_panel(self, channel: discord.TextChannel) -> None:
         """Post a fresh panel in *channel* and persist the config."""
-        parties, _ = await self._fetch_state()
+        parties = await self._fetch_state()
         layout = build_panel_layout(parties, SITE_URL, self)
 
         self._panel_channel = channel
@@ -186,7 +184,7 @@ class PartyService(Service):
             if isinstance(self._panel_channel, discord.TextChannel):
                 await self.setup_panel(self._panel_channel)
             return
-        parties, _ = await self._fetch_state()
+        parties = await self._fetch_state()
         new_hash = _state_hash(parties)
         if new_hash == self._last_state_hash:
             return

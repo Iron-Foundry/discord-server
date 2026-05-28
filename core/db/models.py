@@ -157,7 +157,7 @@ class PartyDB(Base):
     description: Mapped[str | None] = mapped_column(Text)
     vibe: Mapped[str] = mapped_column(Text, nullable=False, server_default="chill")
     max_size: Mapped[int] = mapped_column(Integer, nullable=False)
-    ping_role_ids: Mapped[list] = mapped_column(
+    notification_category_ids: Mapped[list] = mapped_column(
         JSONB, nullable=False, server_default="[]"
     )
     hub_code: Mapped[str] = mapped_column(Text, nullable=False)

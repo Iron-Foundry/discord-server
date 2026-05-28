@@ -418,11 +418,7 @@ class PartyPanelLayoutView(discord.ui.LayoutView):
         shown = parties[:_MAX_PARTY_SECTIONS]
         overflow = max(0, len(parties) - _MAX_PARTY_SECTIONS)
 
-        # Header with active ping role mentions
-        ping_ids = {rid for p in parties for rid in (p.ping_role_ids or [])}
         header = "## Iron Foundry - Parties"
-        if ping_ids:
-            header += "\n" + "  ".join(f"<@&{rid}>" for rid in ping_ids)
 
         children: list[discord.ui.Item] = [
             discord.ui.TextDisplay(content=header),

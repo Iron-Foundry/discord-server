@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 from core.db.models import Config, PartyDB, PartyMemberDB
 
 _PANEL_KEY = "party_panel"
-_PING_ROLES_KEY = "party_ping_roles"
+_NOTIFICATION_CATEGORIES_KEY = "party_notification_categories"
 _GLOBAL_GUILD_ID = 0
 
 _WORDLIST = [
@@ -169,17 +169,17 @@ class PgPartyRepository:
             )
             return result.scalar_one_or_none()
 
-    async def get_ping_roles(self) -> list[dict]:
-        """Return the configured party ping roles from global config."""
+    async def get_notification_categories(self) -> list[dict]:
+        """Return the configured party notification categories from global config."""
         async with self._factory() as session:
             result = await session.execute(
                 select(Config.value).where(
                     Config.guild_id == _GLOBAL_GUILD_ID,
-                    Config.key == _PING_ROLES_KEY,
+                    Config.key == _NOTIFICATION_CATEGORIES_KEY,
                 )
             )
             data = result.scalar_one_or_none() or {}
-            return data.get("roles", [])  # type: ignore[return-value]
+            return data.get("categories", [])  # type: ignore[return-value]
 
     # ── Mutations ──────────────────────────────────────────────────────────
 
@@ -194,7 +194,7 @@ class PgPartyRepository:
         vibe: str,
         max_size: int,
         ttl_hours: float,
-        ping_role_ids: list[str],
+        notification_category_ids: list[str] | None = None,
     ) -> PartyDB:
         """Create a party record and add the leader as first member."""
         now = datetime.now(timezone.utc)
@@ -208,7 +208,7 @@ class PgPartyRepository:
             description=description,
             vibe=vibe,
             max_size=max_size,
-            ping_role_ids=ping_role_ids,
+            notification_category_ids=notification_category_ids or [],
             hub_code=_generate_hub_code(),
             status="open",
             created_at=now,
