@@ -93,16 +93,37 @@ class PartyService(Service):
         for member in party.members:  # type: ignore[attr-defined]
             if exclude_user_id and member.user_id == exclude_user_id:
                 continue
-            await self._dm_safe(member.user_id, message)
+            await self._dm_safe(member.user_id, content=message)
 
-    async def _dm_safe(self, user_id: str, content: str) -> None:
+    async def _dm_safe(
+        self,
+        user_id: str,
+        *,
+        content: str | None = None,
+        embed: discord.Embed | None = None,
+    ) -> None:
         try:
             user = await self._client.fetch_user(int(user_id))
-            await user.send(content)
+            await user.send(content=content, embed=embed)
         except (discord.NotFound, discord.Forbidden, discord.HTTPException) as exc:
             logger.debug(
                 "PartyService: could not DM user {} - {}", user_id, exc
             )
+
+    def _build_embed(self, data: dict) -> discord.Embed:
+        embed = discord.Embed(
+            title=data.get("title"),
+            description=data.get("description"),
+            color=data.get("color", 0x57F287),
+            url=data.get("url"),
+        )
+        for field in data.get("fields", []):
+            embed.add_field(
+                name=field["name"],
+                value=field["value"],
+                inline=field.get("inline", True),
+            )
+        return embed
 
     async def _party_notify_subscriber(self) -> None:
         from valkey.asyncio import Valkey as ValkeyClient
@@ -124,9 +145,14 @@ class PartyService(Service):
                         try:
                             data = json.loads(raw["data"])
                             user_ids: list[str] = data.get("user_ids", [])
-                            message: str = data.get("message", "")
-                            for uid in user_ids:
-                                await self._dm_safe(uid, message)
+                            if "embed" in data:
+                                embed = self._build_embed(data["embed"])
+                                for uid in user_ids:
+                                    await self._dm_safe(uid, embed=embed)
+                            else:
+                                message: str = data.get("message", "")
+                                for uid in user_ids:
+                                    await self._dm_safe(uid, content=message)
                         except Exception as exc:
                             logger.warning(
                                 "PartyService: notify subscriber error - {}",
