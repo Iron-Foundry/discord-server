@@ -4,6 +4,7 @@ from loguru import logger
 
 from core.discord_client import DiscordClient
 from core.config import ConfigInterface, ConfigVars
+from core.metrics_reporter import MetricsReporter
 
 
 async def main():
@@ -17,7 +18,15 @@ async def main():
         exit(code=1)
 
     client = DiscordClient(debug=debug_mode == "true")
-    await client.start(token=discord_token)
+    reporter = MetricsReporter(client)
+
+    try:
+        await client.login(token=discord_token)
+        await reporter.start()
+        await client.connect()
+    finally:
+        await reporter.stop()
+        await client.close()
 
 
 if __name__ == "__main__":
