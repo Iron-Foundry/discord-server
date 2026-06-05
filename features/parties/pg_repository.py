@@ -19,25 +19,135 @@ _NOTIFICATION_CATEGORIES_KEY = "party_notification_categories"
 _GLOBAL_GUILD_ID = 0
 
 _WORDLIST = [
-    "abyssal", "ancient", "anvil", "arcane", "armadyl", "arrow", "axe",
-    "bandos", "barrows", "berserker", "brimstone", "bronze", "brutal",
-    "cannonball", "chaos", "chimera", "coffer", "coral", "crystal",
-    "dagannoth", "dark", "death", "defender", "demon", "divine", "dragon",
-    "dragonfire", "dusk", "dwarf", "elder", "eternal", "fighter", "fire",
-    "flask", "forest", "fury", "ghost", "giant", "gloves", "goblin",
-    "golem", "granite", "guthix", "hammer", "helm", "hunter", "hydra",
-    "infernal", "iron", "jad", "justiciar", "karambwan", "kraken", "lance",
-    "lava", "lobster", "magic", "manta", "maple", "marble", "master",
-    "monk", "mortar", "mud", "mystic", "nature", "needle", "nex",
-    "nightmare", "oak", "obsidian", "onyx", "oracle", "pegasian", "pickaxe",
-    "prayer", "quartz", "quest", "ranger", "rapier", "rune", "sacred",
-    "saradomin", "scimitar", "seed", "shark", "shield", "silver", "skeleton",
-    "slayer", "smoke", "snow", "soul", "spade", "spectral", "staff", "steel",
-    "storm", "sword", "teak", "thorn", "titan", "toad", "tome", "torch",
-    "torva", "toxic", "trident", "tuna", "twisted", "vanguard", "venom",
-    "vigour", "viper", "void", "vorkath", "warhammer", "warped", "water",
-    "whip", "willow", "wings", "witch", "wolf", "wrath", "yew",
-    "zamorak", "zenyte", "zulrah",
+    "abyssal",
+    "ancient",
+    "anvil",
+    "arcane",
+    "armadyl",
+    "arrow",
+    "axe",
+    "bandos",
+    "barrows",
+    "berserker",
+    "brimstone",
+    "bronze",
+    "brutal",
+    "cannonball",
+    "chaos",
+    "chimera",
+    "coffer",
+    "coral",
+    "crystal",
+    "dagannoth",
+    "dark",
+    "death",
+    "defender",
+    "demon",
+    "divine",
+    "dragon",
+    "dragonfire",
+    "dusk",
+    "dwarf",
+    "elder",
+    "eternal",
+    "fighter",
+    "fire",
+    "flask",
+    "forest",
+    "fury",
+    "ghost",
+    "giant",
+    "gloves",
+    "goblin",
+    "golem",
+    "granite",
+    "guthix",
+    "hammer",
+    "helm",
+    "hunter",
+    "hydra",
+    "infernal",
+    "iron",
+    "jad",
+    "justiciar",
+    "karambwan",
+    "kraken",
+    "lance",
+    "lava",
+    "lobster",
+    "magic",
+    "manta",
+    "maple",
+    "marble",
+    "master",
+    "monk",
+    "mortar",
+    "mud",
+    "mystic",
+    "nature",
+    "needle",
+    "nex",
+    "nightmare",
+    "oak",
+    "obsidian",
+    "onyx",
+    "oracle",
+    "pegasian",
+    "pickaxe",
+    "prayer",
+    "quartz",
+    "quest",
+    "ranger",
+    "rapier",
+    "rune",
+    "sacred",
+    "saradomin",
+    "scimitar",
+    "seed",
+    "shark",
+    "shield",
+    "silver",
+    "skeleton",
+    "slayer",
+    "smoke",
+    "snow",
+    "soul",
+    "spade",
+    "spectral",
+    "staff",
+    "steel",
+    "storm",
+    "sword",
+    "teak",
+    "thorn",
+    "titan",
+    "toad",
+    "tome",
+    "torch",
+    "torva",
+    "toxic",
+    "trident",
+    "tuna",
+    "twisted",
+    "vanguard",
+    "venom",
+    "vigour",
+    "viper",
+    "void",
+    "vorkath",
+    "warhammer",
+    "warped",
+    "water",
+    "whip",
+    "willow",
+    "wings",
+    "witch",
+    "wolf",
+    "wrath",
+    "yew",
+    "zamorak",
+    "zenyte",
+    "zulrah",
 ]
 
 
@@ -52,9 +162,7 @@ def _with_members(q):  # type: ignore[no-untyped-def]
 class PgPartyRepository:
     """PostgreSQL persistence for the party panel and party records."""
 
-    def __init__(
-        self, session_factory: async_sessionmaker[AsyncSession]
-    ) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._factory = session_factory
 
     # ── Queries ────────────────────────────────────────────────────────────
@@ -115,9 +223,7 @@ class PgPartyRepository:
         now = datetime.now(timezone.utc)
         async with self._factory() as session:
             result = await session.execute(
-                _with_members(
-                    select(PartyDB).where(PartyDB.id == party_id)
-                )
+                _with_members(select(PartyDB).where(PartyDB.id == party_id))
             )
             party = result.scalar_one_or_none()
             if not party or party.status == "closed":
@@ -139,9 +245,7 @@ class PgPartyRepository:
             if len(party.members) >= party.max_size:
                 party.status = "full"
             await session.commit()
-            logger.info(
-                "PartyRepository: {} joined party {}", user_id, party_id
-            )
+            logger.info("PartyRepository: {} joined party {}", user_id, party_id)
             return party
 
     async def get_leader_party(self, leader_id: str) -> PartyDB | None:
@@ -163,9 +267,7 @@ class PgPartyRepository:
 
         async with self._factory() as session:
             result = await session.execute(
-                select(User.rsn).where(
-                    User.discord_user_id == int(discord_user_id)
-                )
+                select(User.rsn).where(User.discord_user_id == int(discord_user_id))
             )
             return result.scalar_one_or_none()
 
@@ -230,17 +332,13 @@ class PgPartyRepository:
             logger.info("PartyRepository: created party {} ({})", party_id, activity)
             return party
 
-    async def remove_member(
-        self, party_id: str, user_id: str
-    ) -> PartyDB | None:
+    async def remove_member(self, party_id: str, user_id: str) -> PartyDB | None:
         """Remove a member from a party. Reopens the party if it was full."""
         from sqlalchemy import delete as sql_delete
 
         async with self._factory() as session:
             result = await session.execute(
-                _with_members(
-                    select(PartyDB).where(PartyDB.id == party_id)
-                )
+                _with_members(select(PartyDB).where(PartyDB.id == party_id))
             )
             party = result.scalar_one_or_none()
             if not party or party.status == "closed":
@@ -256,9 +354,7 @@ class PgPartyRepository:
             if party.status == "full" and len(party.members) < party.max_size:
                 party.status = "open"
             await session.commit()
-            logger.info(
-                "PartyRepository: {} left party {}", user_id, party_id
-            )
+            logger.info("PartyRepository: {} left party {}", user_id, party_id)
             return party
 
     async def abdicate_and_leave(
@@ -272,9 +368,7 @@ class PgPartyRepository:
 
         async with self._factory() as session:
             result = await session.execute(
-                _with_members(
-                    select(PartyDB).where(PartyDB.id == party_id)
-                )
+                _with_members(select(PartyDB).where(PartyDB.id == party_id))
             )
             party = result.scalar_one_or_none()
             if not party or party.status == "closed":
@@ -310,9 +404,7 @@ class PgPartyRepository:
         """Mark a party as closed. Returns the updated party or None."""
         async with self._factory() as session:
             result = await session.execute(
-                _with_members(
-                    select(PartyDB).where(PartyDB.id == party_id)
-                )
+                _with_members(select(PartyDB).where(PartyDB.id == party_id))
             )
             party = result.scalar_one_or_none()
             if party and party.status != "closed":
@@ -340,9 +432,7 @@ class PgPartyRepository:
             await session.execute(stmt)
             await session.commit()
 
-    async def get_panel_config(
-        self, guild_id: int
-    ) -> tuple[int, int] | None:
+    async def get_panel_config(self, guild_id: int) -> tuple[int, int] | None:
         """Return (channel_id, message_id) or None if not configured."""
         async with self._factory() as session:
             result = await session.execute(

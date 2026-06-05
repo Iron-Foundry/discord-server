@@ -19,6 +19,7 @@ _MAX_PARTY_SECTIONS = 7
 
 # ── Party text builder ────────────────────────────────────────────────────────
 
+
 def _build_party_text(party: PartyDB) -> str:
     status_suffix = " *(Full)*" if party.status == "full" else ""
     lines: list[str] = [f"**{party.activity}**{status_suffix}"]
@@ -59,6 +60,7 @@ def _build_party_text(party: PartyDB) -> str:
 
 # ── Status layout (ephemeral final states) ────────────────────────────────────
 
+
 class _StatusLayout(discord.ui.LayoutView):
     """Minimal ephemeral status/success/error message layout."""
 
@@ -73,6 +75,7 @@ class _StatusLayout(discord.ui.LayoutView):
 
 # ── Per-party join button ─────────────────────────────────────────────────────
 
+
 class _PartyJoinButton(discord.ui.Button):
     """Direct join button for one party.
 
@@ -80,9 +83,7 @@ class _PartyJoinButton(discord.ui.Button):
     bug (#10335) where self.view may be None on deeply nested items.
     """
 
-    def __init__(
-        self, *, party_id: str, is_full: bool, service: PartyService
-    ) -> None:
+    def __init__(self, *, party_id: str, is_full: bool, service: PartyService) -> None:
         super().__init__(
             label="Full" if is_full else "Join",
             style=(
@@ -153,6 +154,7 @@ class _PartyJoinButton(discord.ui.Button):
 
 # ── Panel action buttons ──────────────────────────────────────────────────────
 
+
 class CreatePartyButton(discord.ui.Button):
     """Opens the party creation modal."""
 
@@ -167,9 +169,7 @@ class CreatePartyButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction) -> None:
         from features.parties.views.create_flow import CreatePartyModal
 
-        await interaction.response.send_modal(
-            CreatePartyModal(service=self._service)
-        )
+        await interaction.response.send_modal(CreatePartyModal(service=self._service))
 
 
 class LeavePartyButton(discord.ui.Button):
@@ -218,6 +218,7 @@ class LeavePartyButton(discord.ui.Button):
 
 # ── Leave flows ───────────────────────────────────────────────────────────────
 
+
 class _LeaveSelectLayout(discord.ui.LayoutView):
     """Party picker when user is in multiple parties (timeout=60s)."""
 
@@ -253,9 +254,7 @@ class _LeaveSelectLayout(discord.ui.LayoutView):
 
         self.add_item(
             discord.ui.Container(
-                discord.ui.TextDisplay(
-                    content="Select which party to leave:"
-                ),
+                discord.ui.TextDisplay(content="Select which party to leave:"),
                 discord.ui.ActionRow(select),
             )
         )
@@ -294,9 +293,7 @@ class _LeaveConfirmLayout(discord.ui.LayoutView):
         self._is_leader = party.leader_id == user_id
         self._next_leader_id: str | None = None
         self._next_leader_name: str | None = None
-        leaving_member = next(
-            (m for m in party.members if m.user_id == user_id), None
-        )
+        leaving_member = next((m for m in party.members if m.user_id == user_id), None)
         self._user_display = (
             (leaving_member.rsn or leaving_member.username)
             if leaving_member
@@ -383,12 +380,11 @@ class _LeaveConfirmLayout(discord.ui.LayoutView):
         )
 
     async def _on_cancel(self, interaction: discord.Interaction) -> None:
-        await interaction.response.edit_message(
-            view=_StatusLayout("Cancelled.")
-        )
+        await interaction.response.edit_message(view=_StatusLayout("Cancelled."))
 
 
 # ── Panel layout builder ──────────────────────────────────────────────────────
+
 
 def build_panel_layout(
     parties: list[PartyDB],
@@ -428,18 +424,14 @@ class PartyPanelLayoutView(discord.ui.LayoutView):
         if not shown:
             children.append(
                 discord.ui.TextDisplay(
-                    content=(
-                        "No active parties - create one to get started!"
-                    )
+                    content=("No active parties - create one to get started!")
                 )
             )
         else:
             for i, party in enumerate(shown):
                 children.append(
                     discord.ui.Section(
-                        discord.ui.TextDisplay(
-                            content=_build_party_text(party)
-                        ),
+                        discord.ui.TextDisplay(content=_build_party_text(party)),
                         accessory=_PartyJoinButton(
                             party_id=party.id,
                             is_full=party.status == "full",

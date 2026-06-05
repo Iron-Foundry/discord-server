@@ -56,9 +56,7 @@ class UserKeyService(Service):
             )
         return error
 
-    async def set_primary_account(
-        self, member: discord.Member, rsn: str
-    ) -> str | None:
+    async def set_primary_account(self, member: discord.Member, rsn: str) -> str | None:
         """Promote an RSN to primary. Returns error message or None on success."""
         error = await self._repo.set_primary_account(member.id, rsn)
         if not error:

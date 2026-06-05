@@ -14,7 +14,9 @@ if TYPE_CHECKING:
     from features.parties.service import PartyService
 
 
-class PartyGroup(app_commands.Group, name="party", description="Party panel management"):
+class PartyGroup(
+    app_commands.Group, name="party", description="Party panel management"
+):
     """Staff commands for managing the party panel."""
 
     def __init__(self, service: PartyService) -> None:

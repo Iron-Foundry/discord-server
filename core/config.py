@@ -54,7 +54,9 @@ async def get_staff_role_ids() -> dict[str, int | None]:
     try:
         async with get_session_factory()() as session:
             result = await session.execute(
-                select(Config.value).where(Config.guild_id == 0, Config.key == "discord_roles")
+                select(Config.value).where(
+                    Config.guild_id == 0, Config.key == "discord_roles"
+                )
             )
             data = result.scalar_one_or_none() or {}
     except Exception:
@@ -66,7 +68,9 @@ async def get_staff_role_ids() -> dict[str, int | None]:
 
     return {
         "staff_role_id": _resolve(data.get("staff_role_id", ""), "STAFF_ROLE_ID"),
-        "senior_staff_role_id": _resolve(data.get("senior_staff_role_id", ""), "SENIOR_STAFF_ROLE_ID"),
+        "senior_staff_role_id": _resolve(
+            data.get("senior_staff_role_id", ""), "SENIOR_STAFF_ROLE_ID"
+        ),
         "owner_role_id": _resolve(data.get("owner_role_id", ""), "OWNER_ROLE_ID"),
         "mentor_role_id": _resolve(data.get("mentor_role_id", ""), "MENTOR_ROLE_ID"),
     }

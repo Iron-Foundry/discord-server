@@ -23,7 +23,9 @@ async def upload_file(
     file_obj.name = filename
 
     api = AsyncUTApi(UTApiOptions(token=secret))
-    results = await api.upload_files(file_obj, acl="public-read", content_disposition="inline")
+    results = await api.upload_files(
+        file_obj, acl="public-read", content_disposition="inline"
+    )
 
     if not results:
         raise RuntimeError("UploadThing returned no results")

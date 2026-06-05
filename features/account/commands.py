@@ -20,11 +20,15 @@ def _validate_rsn(rsn: str) -> str | None:
     """Return error message if invalid, None if valid."""
     rsn = rsn.strip()
     if not rsn or not _RSN_RE.match(rsn):
-        return "Invalid RSN. Must be 1–12 characters (letters, numbers, spaces, hyphens)."
+        return (
+            "Invalid RSN. Must be 1–12 characters (letters, numbers, spaces, hyphens)."
+        )
     return None
 
 
-class AltsGroup(app_commands.Group, name="alts", description="Manage linked alt accounts"):
+class AltsGroup(
+    app_commands.Group, name="alts", description="Manage linked alt accounts"
+):
     """Subcommands for managing multiple linked RSNs."""
 
     def __init__(self, service: UserKeyService) -> None:
@@ -56,7 +60,9 @@ class AltsGroup(app_commands.Group, name="alts", description="Manage linked alt 
             "**Your linked RSNs:**\n" + "\n".join(lines), ephemeral=True
         )
 
-    @app_commands.command(name="add", description="Link an additional RSN to your account")
+    @app_commands.command(
+        name="add", description="Link an additional RSN to your account"
+    )
     @app_commands.describe(rsn="Alt RSN to link (1–12 characters)")
     async def add(self, interaction: discord.Interaction, rsn: str) -> None:
         """Add an alt RSN."""
@@ -82,9 +88,7 @@ class AltsGroup(app_commands.Group, name="alts", description="Manage linked alt 
             f"RSN **{rsn}** added to your account.", ephemeral=True
         )
 
-    @app_commands.command(
-        name="set-primary", description="Change your primary RSN"
-    )
+    @app_commands.command(name="set-primary", description="Change your primary RSN")
     @app_commands.describe(rsn="RSN to make your primary account")
     async def set_primary(self, interaction: discord.Interaction, rsn: str) -> None:
         """Promote an RSN to primary."""

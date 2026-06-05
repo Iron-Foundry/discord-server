@@ -199,9 +199,7 @@ class PgUserKeyRepository:
             if conflict_owner == discord_user_id:
                 return "You already have that RSN linked."
             if conflict_owner is not None:
-                return (
-                    "That RSN is already linked. If this is your account, contact staff."
-                )
+                return "That RSN is already linked. If this is your account, contact staff."
 
             # Cap check
             cap = await session.execute(
@@ -316,9 +314,7 @@ class PgUserKeyRepository:
                     .values(rsn=None, updated_at=now)
                 )
 
-            await session.execute(
-                delete(UserAccount).where(UserAccount.id == row.id)
-            )
+            await session.execute(delete(UserAccount).where(UserAccount.id == row.id))
             await session.commit()
             return None
 

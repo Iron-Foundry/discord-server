@@ -106,9 +106,7 @@ class PartyService(Service):
             user = await self._client.fetch_user(int(user_id))
             await user.send(content=content, embed=embed)
         except (discord.NotFound, discord.Forbidden, discord.HTTPException) as exc:
-            logger.debug(
-                "PartyService: could not DM user {} - {}", user_id, exc
-            )
+            logger.debug("PartyService: could not DM user {} - {}", user_id, exc)
 
     def _build_embed(self, data: dict) -> discord.Embed:
         embed = discord.Embed(
@@ -136,9 +134,7 @@ class PartyService(Service):
             try:
                 async with client.pubsub() as ps:
                     await ps.subscribe("foundry:party_notify")
-                    logger.info(
-                        "PartyService: subscribed to foundry:party_notify"
-                    )
+                    logger.info("PartyService: subscribed to foundry:party_notify")
                     async for raw in ps.listen():
                         if raw["type"] != "message":
                             continue

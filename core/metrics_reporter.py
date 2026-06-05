@@ -135,8 +135,9 @@ class MetricsReporter:
 
         users_with_rsn = (
             await session.execute(
-                select(func.count(func.distinct(UserAccount.discord_user_id)))
-                .select_from(UserAccount)
+                select(
+                    func.count(func.distinct(UserAccount.discord_user_id))
+                ).select_from(UserAccount)
             )
         ).scalar_one()
 
@@ -171,8 +172,13 @@ class MetricsReporter:
                     response.text,
                 )
             else:
-                logger.debug("MetricsReporter: reported {}/{}", _SERVICE_NAME, module_name)
+                logger.debug(
+                    "MetricsReporter: reported {}/{}", _SERVICE_NAME, module_name
+                )
         except Exception as exc:
             logger.warning(
-                "MetricsReporter: failed to report {}/{} - {}", _SERVICE_NAME, module_name, exc
+                "MetricsReporter: failed to report {}/{} - {}",
+                _SERVICE_NAME,
+                module_name,
+                exc,
             )

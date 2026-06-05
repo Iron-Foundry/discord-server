@@ -28,6 +28,7 @@ def _parse_size(raw: str) -> int:
 
 # ── Modal ─────────────────────────────────────────────────────────────────────
 
+
 class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
     """Collect party details from the user."""
 
@@ -81,6 +82,7 @@ class CreatePartyModal(discord.ui.Modal, title="Create a Party"):
 
 # ── Shared creation helper ────────────────────────────────────────────────────
 
+
 async def _create_and_respond(
     *,
     interaction: discord.Interaction,
@@ -115,6 +117,4 @@ async def _create_and_respond(
         f"**{activity}** created! Hub code: `{party.hub_code}`\n"
         "Manage your party fully at ironfoundry.cc/parties."
     )
-    await interaction.response.send_message(
-        view=_StatusLayout(msg), ephemeral=True
-    )
+    await interaction.response.send_message(view=_StatusLayout(msg), ephemeral=True)
