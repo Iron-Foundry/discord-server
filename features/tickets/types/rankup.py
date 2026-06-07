@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import discord
 from collections.abc import Callable, Coroutine
-from datetime import datetime, UTC
 from typing import Any
 
 from core.common.ticket_types import TicketTypeId
 from features.tickets.models.ticket import TicketTypeConfig, TicketTeam, TicketRecord
+from features.tickets.views._layout_helpers import header_items
 
 _RANK_HINT = "Sapphire, Emerald, Ruby, Diamond, Dragonstone, Onyx, Zenyte"
 
@@ -54,6 +56,7 @@ class RankupTicket(TicketTypeConfig):
 
     def __init__(self, staff_role_id: int) -> None:
         self._teams = [TicketTeam(name="Staff", role_id=staff_role_id)]
+        self._db_overrides: dict = {}
 
     @property
     def identifier(self) -> str:
@@ -61,15 +64,15 @@ class RankupTicket(TicketTypeConfig):
 
     @property
     def display_name(self) -> str:
-        return "Rank Up"
+        return self._db_overrides.get("display_name", "Rank Up")
 
     @property
     def description(self) -> str:
-        return "Apply for a rank based on your OSRS achievements."
+        return self._db_overrides.get("description", "Apply for a rank based on your OSRS achievements.")
 
     @property
     def emoji(self) -> str:
-        return "⬆️"
+        return self._db_overrides.get("emoji", "⬆️")
 
     @property
     def color(self) -> discord.Color:
@@ -95,21 +98,52 @@ class RankupTicket(TicketTypeConfig):
     ) -> discord.ui.Modal | None:
         return RankupModal(callback)
 
-    def build_create_embed(self, record: TicketRecord) -> discord.Embed:
+    def build_create_layout(
+        self,
+        record: TicketRecord,
+        *,
+        header_attachment: str | None = None,
+        rank_images: dict[str, str] | None = None,
+    ) -> discord.ui.LayoutView:
         meta = record.metadata
-        embed = discord.Embed(
-            title=f"{self.emoji} Rank Up Application - #{record.ticket_id:04d}",
-            color=self.color,
-            timestamp=datetime.now(UTC),
+        welcome = self.welcome_text or (
+            "To process your application we need screenshots of "
+            "`all items/requirements in the rank tier you are going for or upgrades thereof.`"
         )
-        embed.add_field(name="Applicant", value=f"<@{record.creator.id}>", inline=True)
-        embed.add_field(
-            name="Current Rank", value=meta.get("current_rank", "-"), inline=True
-        )
-        embed.add_field(
-            name="Applying For", value=meta.get("target_rank", "-"), inline=True
-        )
-        embed.set_footer(
-            text="This ticket will auto-close after 24 hours of inactivity."
-        )
-        return embed
+        view = discord.ui.LayoutView(timeout=None)
+        children: list[discord.ui.Item] = [
+            *header_items(header_attachment),
+            discord.ui.TextDisplay(
+                content=(
+                    f"## {self.emoji} Rank Up Application - #{record.ticket_id:04d}\n"
+                    f"**Applicant:** <@{record.creator.id}>\n"
+                    f"**Current Rank:** {meta.get('current_rank', '-')}\n"
+                    f"**Applying For:** {meta.get('target_rank', '-')}\n\n"
+                    f"{welcome}\n\n"
+                    "-# This ticket will auto-close after 24 hours of inactivity."
+                )
+            ),
+        ]
+        if rank_images:
+            if fn := rank_images.get("rank_reqs"):
+                children.append(discord.ui.Separator())
+                children.append(discord.ui.TextDisplay(content="### Rank Structure:"))
+                children.append(
+                    discord.ui.MediaGallery(
+                        discord.MediaGalleryItem(
+                            media=discord.UnfurledMediaItem(url=f"attachment://{fn}")
+                        )
+                    )
+                )
+            if fn := rank_images.get("rank_upgrades"):
+                children.append(discord.ui.Separator())
+                children.append(discord.ui.TextDisplay(content="### Valid Item & Requirement Upgrades:"))
+                children.append(
+                    discord.ui.MediaGallery(
+                        discord.MediaGalleryItem(
+                            media=discord.UnfurledMediaItem(url=f"attachment://{fn}")
+                        )
+                    )
+                )
+        view.add_item(discord.ui.Container(*children, accent_colour=self.color))
+        return view

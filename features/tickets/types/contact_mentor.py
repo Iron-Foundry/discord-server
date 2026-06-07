@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import discord
 from collections.abc import Callable, Coroutine
-from datetime import datetime, UTC
 from typing import Any
 
 from core.common.ticket_types import TicketTypeId
 from features.tickets.models.ticket import TicketTypeConfig, TicketTeam, TicketRecord
+from features.tickets.views._layout_helpers import header_items
 
 
 class ContactMentorModal(discord.ui.Modal, title="Contact a Mentor"):
@@ -57,11 +59,14 @@ class ContactMentorModal(discord.ui.Modal, title="Contact a Mentor"):
 class ContactMentorTicket(TicketTypeConfig):
     """Ticket for getting in contact with a mentor for Raids & PVM help."""
 
+    default_frozen: bool = True
+
     def __init__(self, mentor_role_id: int, staff_role_id: int) -> None:
         self._teams = [
             TicketTeam(name="Mentors", role_id=mentor_role_id),
             TicketTeam(name="Staff", role_id=staff_role_id),
         ]
+        self._db_overrides: dict = {}
 
     @property
     def identifier(self) -> str:
@@ -69,15 +74,15 @@ class ContactMentorTicket(TicketTypeConfig):
 
     @property
     def display_name(self) -> str:
-        return "Contact a Mentor"
+        return self._db_overrides.get("display_name", "Contact a Mentor")
 
     @property
     def description(self) -> str:
-        return "Get help from a mentor with Raids & PVM."
+        return self._db_overrides.get("description", "Get help from a mentor with Raids & PVM.")
 
     @property
     def emoji(self) -> str:
-        return "⚔️"
+        return self._db_overrides.get("emoji", "⚔️")
 
     @property
     def color(self) -> discord.Color:
@@ -103,20 +108,30 @@ class ContactMentorTicket(TicketTypeConfig):
     ) -> discord.ui.Modal | None:
         return ContactMentorModal(callback)
 
-    def build_create_embed(self, record: TicketRecord) -> discord.Embed:
+    def build_create_layout(
+        self,
+        record: TicketRecord,
+        *,
+        header_attachment: str | None = None,
+        rank_images: dict[str, str] | None = None,
+    ) -> discord.ui.LayoutView:
         meta = record.metadata
-        embed = discord.Embed(
-            title=f"{self.emoji} PVM Help - #{record.ticket_id:04d}",
-            color=self.color,
-            timestamp=datetime.now(UTC),
+        view = discord.ui.LayoutView(timeout=None)
+        view.add_item(
+            discord.ui.Container(
+                *header_items(header_attachment),
+                discord.ui.TextDisplay(
+                    content=(
+                        f"## {self.emoji} PVM Help - #{record.ticket_id:04d}\n"
+                        f"**Player:** <@{record.creator.id}>\n"
+                        f"**RSN:** {meta.get('rsn', '-')}\n"
+                        f"**Content:** {meta.get('content', '-')}\n"
+                        f"**Experience:** {meta.get('experience', '-')}"
+                        + (f"\n\n{self.welcome_text}" if self.welcome_text else "")
+                        + "\n\n-# A mentor will be with you shortly."
+                    )
+                ),
+                accent_colour=self.color,
+            )
         )
-        embed.add_field(name="Player", value=f"<@{record.creator.id}>", inline=True)
-        embed.add_field(name="RSN", value=meta.get("rsn", "-"), inline=True)
-        embed.add_field(name="Content", value=meta.get("content", "-"), inline=False)
-        embed.add_field(
-            name="Experience", value=meta.get("experience", "-"), inline=False
-        )
-        embed.set_footer(
-            text="A mentor will be with you shortly. This ticket will auto-close after 24 hours of inactivity."
-        )
-        return embed
+        return view

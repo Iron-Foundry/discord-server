@@ -30,6 +30,7 @@ from features.tickets.models.transcript import (
 from core.service_base import Service
 
 TICKET_TIMEOUT_SECONDS = 86_400  # 24 hours
+_STICKY_IDLE_SECONDS = 20
 
 
 @dataclass
@@ -86,6 +87,10 @@ class TicketService(Service):
         self._http_client: httpx.AsyncClient | None = (
             httpx.AsyncClient() if self._uploadthing_secret else None
         )
+        # ticket_id → sticky re-post task
+        self._sticky_tasks: dict[int, asyncio.Task] = {}
+        self._panel_header_filename: str | None = None
+        self._config_refresh_task: asyncio.Task | None = None
 
     # -------------------------------------------------------------------------
     # Startup - restart recovery
@@ -100,6 +105,27 @@ class TicketService(Service):
 
         Must be called from on_ready, after the guild cache is fully populated.
         """
+        # Register the global sticky view so existing sticky buttons work after restart
+        from features.tickets.views.ticket_sticky import TicketStickyView
+
+        self._client.add_view(TicketStickyView(service=self))
+
+        # Apply DB-sourced config overrides to all registered ticket types
+        try:
+            overrides = await self.repo.get_type_config_overrides(self.guild.id)
+            for ticket_type in self.type_registry.get_all():
+                type_overrides = overrides.get(ticket_type.identifier, {})
+                if type_overrides:
+                    ticket_type.apply_overrides(type_overrides)
+            if overrides:
+                logger.info("TicketService: applied DB config overrides for {} types", len(overrides))
+        except Exception as exc:
+            logger.warning("TicketService: could not load type config overrides: {}", exc)
+
+        self._config_refresh_task = asyncio.create_task(
+            self._config_refresh_subscriber(), name="ticket-config-refresh-subscriber"
+        )
+
         await self._recover_panel()
 
         records = await self.repo.get_open_tickets(self.guild.id)
@@ -147,13 +173,24 @@ class TicketService(Service):
 
     async def post_panel(self, channel: discord.TextChannel) -> None:
         """Post (or re-post) the ticket panel in the given channel."""
-        from features.tickets.views.panel import TicketPanelView, build_panel_embed
+        import io
+        from features.tickets.views.panel import build_panel_layout
 
         self._panel_channel = channel
         self._panel_category = channel.category
-        embed = build_panel_embed(self.guild)
-        view = TicketPanelView(self)
-        self._panel_message = await channel.send(embed=embed, view=view)
+
+        hdr = await self.repo.get_header_image(self.guild.id, "panel")
+        send_kwargs: dict = {}
+        if hdr:
+            send_kwargs["files"] = [discord.File(io.BytesIO(hdr["data"]), filename=hdr["filename"])]
+            self._panel_header_filename = hdr["filename"]
+        else:
+            self._panel_header_filename = None
+
+        self._panel_message = await channel.send(
+            view=build_panel_layout(self, header_filename=self._panel_header_filename),
+            **send_kwargs,
+        )
         await self.repo.save_panel_config(
             self.guild.id, channel.id, self._panel_message.id
         )
@@ -189,21 +226,30 @@ class TicketService(Service):
             await self.repo.clear_panel_config(self.guild.id)
             return
 
-        from features.tickets.views.panel import TicketPanelView
+        try:
+            hdr = await self.repo.get_header_image(self.guild.id, "panel")
+            self._panel_header_filename = hdr["filename"] if hdr else None
+        except Exception as exc:
+            logger.warning("TicketService: could not load panel header image: {}", exc)
+            self._panel_header_filename = None
 
-        self._client.add_view(TicketPanelView(self), message_id=message_id)
+        from features.tickets.views.panel import TicketPanelLayoutView
+
+        self._client.add_view(
+            TicketPanelLayoutView(service=self), message_id=message_id
+        )
         logger.info(f"TicketService: panel view re-attached (message {message_id})")
 
     async def refresh_panel(self) -> None:
-        """Rebuild the panel select menu to reflect current enabled types."""
+        """Rebuild the panel to reflect current enabled types."""
         if not self._panel_message:
             return
-        from features.tickets.views.panel import TicketPanelView, build_panel_embed
+        from features.tickets.views.panel import build_panel_layout
 
-        embed = build_panel_embed(self.guild)
-        view = TicketPanelView(self)
         try:
-            await self._panel_message.edit(embed=embed, view=view)
+            await self._panel_message.edit(
+                view=build_panel_layout(self, header_filename=self._panel_header_filename)
+            )
         except discord.NotFound:
             logger.warning("Panel message no longer exists; panel not refreshed")
 
@@ -287,6 +333,9 @@ class TicketService(Service):
                 created_at=now,
             )
 
+            if ticket_type.default_frozen:
+                record.timeout_frozen = True
+
             ticket = Ticket(
                 record=record, channel=channel, creator=creator, ticket_type=ticket_type
             )
@@ -295,11 +344,47 @@ class TicketService(Service):
             self.active_tickets[channel.id] = ticket
             await self.repo.save_ticket(record)
 
-            embed = ticket_type.build_create_embed(record)
-            await channel.send(embed=embed)
-            await ticket_type.on_created(record, channel)
+            import io
+            header_file: discord.File | None = None
+            header_attachment: str | None = None
+            try:
+                hdr = await self.repo.get_header_image(self.guild.id, type_id)
+                if hdr:
+                    header_file = discord.File(io.BytesIO(hdr["data"]), filename=hdr["filename"])
+                    header_attachment = hdr["filename"]
+            except Exception as exc:
+                logger.warning("Ticket #{}: could not load header image: {}", ticket_id, exc)
 
-            self._schedule_timeout(ticket, TICKET_TIMEOUT_SECONDS)
+            rank_files: list[discord.File] = []
+            rank_images: dict[str, str] = {}
+            from core.common.ticket_types import TicketTypeId as _TID
+            if type_id in {_TID.RANKUP.value, _TID.JOIN_CC.value}:
+                for img_name in ("rank_reqs", "rank_upgrades"):
+                    try:
+                        img = await self.repo.get_image(self.guild.id, type_id, img_name)
+                        if img:
+                            rank_files.append(discord.File(io.BytesIO(img["data"]), filename=img["filename"]))
+                            rank_images[img_name] = img["filename"]
+                    except Exception as exc:
+                        logger.warning("Ticket #{}: could not load rank image '{}': {}", ticket_id, img_name, exc)
+
+            all_files = ([header_file] if header_file else []) + rank_files
+            create_kwargs: dict = {}
+            if all_files:
+                create_kwargs["files"] = all_files
+            await channel.send(
+                view=ticket_type.build_create_layout(
+                    record,
+                    header_attachment=header_attachment,
+                    rank_images=rank_images or None,
+                ),
+                **create_kwargs,
+            )
+            await ticket_type.on_created(record, channel)
+            await self._post_sticky(ticket)
+
+            if not ticket_type.default_frozen:
+                self._schedule_timeout(ticket, TICKET_TIMEOUT_SECONDS)
 
             logger.info(
                 f"Ticket #{ticket_id} ({ticket_type.display_name}) created by {creator}"
@@ -331,6 +416,7 @@ class TicketService(Service):
             )
 
             await self._cancel_timeout(ticket_id)
+            await self._cancel_sticky(ticket_id)
 
             # Collect message history (skipped for sensitive tickets)
             if ticket.ticket_type.sensitive:
@@ -362,14 +448,9 @@ class TicketService(Service):
             # DM the ticket creator
             try:
                 creator_user = await self.guild.fetch_member(ticket.record.creator.id)
-                dm_lines = [f"**Your ticket #{ticket_id:04d} has been closed.**"]
-                if reason:
-                    dm_lines.append(f"\n**Reason:** {reason}")
-                dm_lines.append(
-                    "\nTo reopen, use `/ticket reopen` with your ticket ID."
-                )
-                dm_text = "\n".join(dm_lines)
+                from features.tickets.views.reopen import build_reopen_layout
 
+                reopen_view = build_reopen_layout(self, ticket_id, closer, reason)
                 has_transcript = (
                     not ticket.ticket_type.sensitive and ticket.transcript.entries
                 )
@@ -379,9 +460,9 @@ class TicketService(Service):
                     )
 
                     file = build_transcript_file(ticket.transcript)
-                    await creator_user.send(dm_text, file=file)
+                    await creator_user.send(view=reopen_view, file=file)
                 else:
-                    await creator_user.send(dm_text)
+                    await creator_user.send(view=reopen_view)
                 logger.debug(f"Ticket #{ticket_id}: close DM sent to {creator_user}")
             except (discord.Forbidden, discord.HTTPException) as e:
                 logger.warning(
@@ -522,9 +603,10 @@ class TicketService(Service):
                 last_message_at=now,
             )
 
-            # Post reopen embed
-            reopen_embed = ticket_type.build_reopen_embed(record, reopener)
-            await new_channel.send(embed=reopen_embed)
+            # Post reopen layout
+            await new_channel.send(
+                view=ticket_type.build_reopen_layout(record, reopener)
+            )
 
             # Register as active ticket
             new_ticket = Ticket.from_record(
@@ -534,6 +616,7 @@ class TicketService(Service):
             self._closed_tickets.pop(ticket_id, None)
 
             self._schedule_timeout(new_ticket, TICKET_TIMEOUT_SECONDS)
+            await self._post_sticky(new_ticket)
             await ticket_type.on_reopened(record, reopener)
 
             logger.info(
@@ -620,29 +703,6 @@ class TicketService(Service):
         logger.info(f"Ticket #{ticket_id} timeout unfrozen")
         return True
 
-    async def spawn_tools(self, interaction: discord.Interaction) -> None:
-        """Post the moderator tools view in the current ticket channel."""
-        if interaction.channel_id is None:
-            await interaction.response.send_message(
-                "Cannot determine channel.", ephemeral=True
-            )
-            return
-        ticket = self.get_ticket_by_channel(interaction.channel_id)
-        if not ticket:
-            await interaction.response.send_message(
-                "This command can only be used inside an active ticket channel.",
-                ephemeral=True,
-            )
-            return
-        from features.tickets.views.ticket_tools import (
-            TicketToolsView,
-            build_tools_embed,
-        )
-
-        view = TicketToolsView(self, ticket.ticket_id, ticket.record.ticket_type)
-        embed = build_tools_embed()
-        await interaction.response.send_message(embed=embed, view=view)
-
     # -------------------------------------------------------------------------
     # Type management
     # -------------------------------------------------------------------------
@@ -727,36 +787,40 @@ class TicketService(Service):
     # -------------------------------------------------------------------------
 
     async def handle_message(self, message: discord.Message) -> None:
-        """Reset the 24-hr inactivity timer and update first_staff_response_at."""
+        """Reset the 24-hr inactivity timer and reschedule sticky bar re-post."""
         if not message.guild or message.author.bot:
             return
 
         ticket = self.active_tickets.get(message.channel.id)
-        if not ticket or ticket.is_frozen:
+        if not ticket:
             return
 
-        now = datetime.now(UTC)
-        ticket.record.last_message_at = now
-        await self.repo.update_ticket(ticket.ticket_id, last_message_at=now)
+        if not ticket.is_frozen:
+            now = datetime.now(UTC)
+            ticket.record.last_message_at = now
+            await self.repo.update_ticket(ticket.ticket_id, last_message_at=now)
 
-        # Track first staff response time and participation
-        if isinstance(message.author, discord.Member) and any(
-            team.is_member(message.author) for team in ticket.ticket_type.teams
-        ):
-            staff_id = message.author.id
-            updates: dict[str, object] = {}
-            if ticket.record.first_staff_response_at is None:
-                ticket.record.first_staff_response_at = now
-                updates["first_staff_response_at"] = now
-            if staff_id not in ticket.record.participants:
-                ticket.record.participants.append(staff_id)
-                updates["participants"] = ticket.record.participants
-            if updates:
-                await self.repo.update_ticket(ticket.ticket_id, **updates)
+            # Track first staff response time and participation
+            if isinstance(message.author, discord.Member) and any(
+                team.is_member(message.author) for team in ticket.ticket_type.teams
+            ):
+                staff_id = message.author.id
+                updates: dict[str, object] = {}
+                if ticket.record.first_staff_response_at is None:
+                    ticket.record.first_staff_response_at = now
+                    updates["first_staff_response_at"] = now
+                if staff_id not in ticket.record.participants:
+                    ticket.record.participants.append(staff_id)
+                    updates["participants"] = ticket.record.participants
+                if updates:
+                    await self.repo.update_ticket(ticket.ticket_id, **updates)
 
-        # Reset the 24-hr timer
-        await self._cancel_timeout(ticket.ticket_id)
-        self._schedule_timeout(ticket, TICKET_TIMEOUT_SECONDS)
+            # Reset the 24-hr timer
+            await self._cancel_timeout(ticket.ticket_id)
+            self._schedule_timeout(ticket, TICKET_TIMEOUT_SECONDS)
+
+        # Reschedule sticky re-post after 20s idle (regardless of freeze state)
+        self._reschedule_sticky(ticket)
 
     # -------------------------------------------------------------------------
     # Timeout internals
@@ -797,6 +861,56 @@ class TicketService(Service):
             reason="This ticket was automatically closed due to 24 hours of inactivity.",
             note="Auto-closed by timeout.",
         )
+
+    # -------------------------------------------------------------------------
+    # Sticky bar internals
+    # -------------------------------------------------------------------------
+
+    async def _post_sticky(self, ticket: Ticket) -> None:
+        from features.tickets.views.ticket_sticky import build_sticky_view
+
+        view = build_sticky_view(
+            self, ticket.record.ticket_type, is_frozen=ticket.is_frozen
+        )
+        try:
+            msg = await ticket.channel.send(view=view)
+            ticket.sticky_message_id = msg.id
+        except discord.HTTPException as e:
+            logger.warning(f"Ticket #{ticket.ticket_id}: failed to post sticky: {e}")
+
+    def _reschedule_sticky(self, ticket: Ticket) -> None:
+        old = self._sticky_tasks.pop(ticket.ticket_id, None)
+        if old and not old.done():
+            old.cancel()
+        task = asyncio.create_task(self._sticky_idle_handler(ticket))
+        self._sticky_tasks[ticket.ticket_id] = task
+
+    async def _sticky_idle_handler(self, ticket: Ticket) -> None:
+        try:
+            await asyncio.sleep(_STICKY_IDLE_SECONDS)
+            await self._move_sticky(ticket)
+        except asyncio.CancelledError:
+            pass
+
+    async def _move_sticky(self, ticket: Ticket) -> None:
+        """Delete old sticky and re-post at channel bottom."""
+        if ticket.sticky_message_id:
+            try:
+                old_msg = await ticket.channel.fetch_message(ticket.sticky_message_id)
+                await old_msg.delete()
+            except discord.HTTPException:
+                pass
+            ticket.sticky_message_id = None
+        await self._post_sticky(ticket)
+
+    async def _cancel_sticky(self, ticket_id: int) -> None:
+        task = self._sticky_tasks.pop(ticket_id, None)
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
     # -------------------------------------------------------------------------
     # Helpers
@@ -916,6 +1030,54 @@ class TicketService(Service):
             f"{new_type.display_name} by {changer}"
         )
         return True
+
+    async def _config_refresh_subscriber(self) -> None:
+        import json
+        import os
+        from valkey.asyncio import Valkey as ValkeyClient
+
+        valkey_uri = os.getenv("VALKEY_URI", "redis://localhost:6379")
+        while True:
+            client: ValkeyClient = ValkeyClient.from_url(valkey_uri, socket_timeout=None)
+            try:
+                async with client.pubsub() as ps:
+                    await ps.subscribe("ticket:config:refresh")
+                    logger.info("TicketService: subscribed to ticket:config:refresh")
+                    async for raw in ps.listen():
+                        if raw["type"] != "message":
+                            continue
+                        try:
+                            data = json.loads(raw["data"]) if isinstance(raw["data"], (str, bytes)) else {}
+                            overrides = await self.repo.get_type_config_overrides(self.guild.id)
+                            for ticket_type in self.type_registry.get_all():
+                                ticket_type.apply_overrides(overrides.get(ticket_type.identifier, {}))
+                            if data.get("type_id") == "panel" and self._panel_channel:
+                                if self._panel_message:
+                                    try:
+                                        await self._panel_message.delete()
+                                    except discord.NotFound:
+                                        pass
+                                    self._panel_message = None
+                                await self.post_panel(self._panel_channel)
+                            else:
+                                await self.refresh_panel()
+                            logger.info(
+                                "TicketService: config refreshed (type={})",
+                                data.get("type_id", "?"),
+                            )
+                        except Exception as exc:
+                            logger.warning("TicketService: config refresh error - {}", exc)
+            except asyncio.CancelledError:
+                logger.info("TicketService: config refresh subscriber shutting down")
+                await client.aclose()
+                return
+            except Exception as exc:
+                logger.warning(
+                    "TicketService: config refresh subscriber lost connection ({}), reconnecting in 5s",
+                    exc,
+                )
+                await client.aclose()
+                await asyncio.sleep(5)
 
     async def _get_or_create_category(
         self, name: str | None

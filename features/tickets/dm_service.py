@@ -43,9 +43,9 @@ class DMTicketService(Service):
             )
             return
 
-        from features.tickets.dm_views import DMMenuView, build_dm_menu_embed
+        from features.tickets.dm_views import build_dm_menu_layout
 
-        embed = build_dm_menu_embed()
-        view = DMMenuView(self._ticket_service, member)
-        await message.channel.send(embed=embed, view=view)
+        await message.channel.send(
+            view=build_dm_menu_layout(self._ticket_service, member)
+        )
         logger.debug(f"DM ticket menu sent to {member} ({member.id})")

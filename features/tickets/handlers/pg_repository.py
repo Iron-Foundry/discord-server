@@ -270,6 +270,42 @@ class PgTicketRepository:
             await session.execute(stmt)
             await session.commit()
 
+    async def get_image(self, guild_id: int, type_id: str, name: str) -> dict | None:
+        """Return {filename, data} for any stored image by type and name, or None."""
+        async with self._factory() as session:
+            result = await session.execute(
+                select(Config.value).where(
+                    Config.guild_id == guild_id, Config.key == _TICKET_KEY
+                )
+            )
+            row = result.scalar_one_or_none() or {}
+        data_key = f"{type_id}_img_{name}_data"
+        filename_key = f"{type_id}_img_{name}_filename"
+        if data_key not in row:
+            return None
+        return {
+            "filename": row[filename_key],
+            "data": base64.b64decode(row[data_key]),
+        }
+
+    async def get_header_image(self, guild_id: int, type_id: str) -> dict | None:
+        """Return {filename, data} for a type or panel header image, or None."""
+        return await self.get_image(guild_id, type_id, "header")
+
+    async def get_type_config_overrides(self, guild_id: int) -> dict[str, dict]:
+        """Return per-type config overrides written by the web UI, keyed by type identifier.
+
+        Returns an empty dict for any type that has not been overridden.
+        """
+        async with self._factory() as session:
+            result = await session.execute(
+                select(Config.value).where(
+                    Config.guild_id == guild_id, Config.key == _TICKET_KEY
+                )
+            )
+            row = result.scalar_one_or_none() or {}
+        return dict(row.get("type_configs", {}))
+
     async def set_rank_details_join_text(self, guild_id: int, join_text: str) -> None:
         """Upsert the join ticket welcome text for a guild."""
         async with self._factory() as session:

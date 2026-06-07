@@ -1,90 +1,130 @@
+"""Persistent ticket panel - Discord Components V2."""
+
 from __future__ import annotations
 
-import discord
 from datetime import datetime, UTC
 from typing import TYPE_CHECKING
 
+import discord
+
+from features.tickets.views._layout_helpers import header_items, status_layout
 
 if TYPE_CHECKING:
     from features.tickets.ticket_service import TicketService
 
 
-class TicketTypeSelect(discord.ui.Select):
-    """Select menu populated dynamically from enabled ticket types."""
+class _TicketOpenButton(discord.ui.Button):
+    """Per-type open button. Stores service directly (discord.py #10335 workaround)."""
 
-    def __init__(self, service: TicketService) -> None:
-        self._service = service
-        options = [t.build_select_option() for t in service.type_registry.get_enabled()]
+    def __init__(self, *, type_id: str, service: TicketService) -> None:
         super().__init__(
-            custom_id="ticket_panel_select",
-            placeholder="Choose a ticket type to open...",
-            min_values=1,
-            max_values=1,
-            options=options,
+            label="Open",
+            style=discord.ButtonStyle.primary,
+            custom_id=f"ticket_open_{type_id}",
         )
+        self._type_id = type_id
+        self._service = service
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        type_id = self.values[0]
-        ticket_type = self._service.type_registry.get(type_id)
+        ticket_type = self._service.type_registry.get(self._type_id)
         if not ticket_type or not ticket_type.enabled:
             await interaction.response.send_message(
-                "That ticket type is no longer available.", ephemeral=True
-            )
-            return
-
-        # Check per-user open ticket limit
-        open_of_type = [
-            t
-            for t in self._service.active_tickets.values()
-            if t.record.creator.id == interaction.user.id
-            and t.record.ticket_type == type_id
-        ]
-        if len(open_of_type) >= ticket_type.max_open_per_user:
-            await interaction.response.send_message(
-                f"You already have an open **{ticket_type.display_name}** ticket. "
-                f"Please resolve it before opening another.",
+                view=status_layout("That ticket type is no longer available."),
                 ephemeral=True,
             )
             return
 
-        # If the type has a creation modal, show it; otherwise create immediately
+        open_of_type = [
+            t
+            for t in self._service.active_tickets.values()
+            if t.record.creator.id == interaction.user.id
+            and t.record.ticket_type == self._type_id
+        ]
+        if len(open_of_type) >= ticket_type.max_open_per_user:
+            await interaction.response.send_message(
+                view=status_layout(
+                    f"You already have an open **{ticket_type.display_name}** ticket.\n"
+                    "Resolve it before opening another."
+                ),
+                ephemeral=True,
+            )
+            return
+
         modal = ticket_type.build_creation_modal(
-            callback=lambda intr, meta: self._service.create_ticket(intr, type_id, meta)
+            callback=lambda intr, meta: self._service.create_ticket(
+                intr, self._type_id, meta
+            )
         )
         if modal is not None:
             await interaction.response.send_modal(modal)
         else:
             await interaction.response.defer(ephemeral=True, thinking=True)
-            ticket = await self._service.create_ticket(interaction, type_id, {})
+            ticket = await self._service.create_ticket(interaction, self._type_id, {})
             if ticket:
                 await interaction.followup.send(
-                    f"Your ticket has been created: {ticket.channel.mention}",
+                    view=status_layout(f"Ticket created: {ticket.channel.mention}"),
                     ephemeral=True,
                 )
             else:
                 await interaction.followup.send(
-                    "Failed to create your ticket. Please try again.", ephemeral=True
+                    view=status_layout("Failed to create ticket. Please try again."),
+                    ephemeral=True,
                 )
 
 
-class TicketPanelView(discord.ui.View):
-    """Persistent panel view. Rebuilt whenever types are enabled/disabled."""
+def build_panel_layout(
+    service: TicketService, *, header_filename: str | None = None
+) -> TicketPanelLayoutView:
+    return TicketPanelLayoutView(service=service, header_filename=header_filename)
 
-    def __init__(self, service: TicketService) -> None:
+
+class TicketPanelLayoutView(discord.ui.LayoutView):
+    """Persistent panel - rebuilt whenever types are enabled/disabled."""
+
+    def __init__(self, *, service: TicketService, header_filename: str | None = None) -> None:
         super().__init__(timeout=None)
-        self.add_item(TicketTypeSelect(service))
+        enabled = service.type_registry.get_enabled()
 
+        children: list[discord.ui.Item] = [
+            *header_items(header_filename),
+            discord.ui.TextDisplay(content="## Iron Foundry - Support & Tickets"),
+            discord.ui.Separator(),
+        ]
 
-def build_panel_embed(guild: discord.Guild) -> discord.Embed:
-    embed = discord.Embed(
-        title="🎫 Iron Foundry - Support & Tickets",
-        description=(
-            "Need help or want to apply for something? Use the menu below to open a ticket.\n\n"
-            "A staff member will assist you as soon as possible.\n"
-            "Tickets automatically close after **24 hours** of inactivity."
-        ),
-        color=discord.Color.blurple(),
-        timestamp=datetime.now(UTC),
-    )
-    embed.set_footer(text=guild.name, icon_url=guild.icon.url if guild.icon else None)
-    return embed
+        for i, ticket_type in enumerate(enabled):
+            children.append(
+                discord.ui.Section(
+                    discord.ui.TextDisplay(
+                        content=(
+                            f"**{ticket_type.emoji} {ticket_type.display_name}**\n"
+                            f"{ticket_type.description}"
+                        )
+                    ),
+                    accessory=_TicketOpenButton(
+                        type_id=ticket_type.identifier, service=service
+                    ),
+                )
+            )
+            if i < len(enabled) - 1:
+                children.append(discord.ui.Separator())
+
+        if not enabled:
+            children.append(
+                discord.ui.TextDisplay(
+                    content="No ticket types are currently available."
+                )
+            )
+
+        now_ts = int(datetime.now(UTC).timestamp())
+        children.extend(
+            [
+                discord.ui.Separator(),
+                discord.ui.TextDisplay(
+                    content=f"-# Tickets close after 24h of inactivity · Last updated <t:{now_ts}:R>"
+                ),
+            ]
+        )
+
+        self.add_item(
+            discord.ui.Container(*children, accent_colour=discord.Color.gold())
+        )

@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import discord
-from datetime import datetime, UTC
 
 from core.common.ticket_types import TicketTypeId
 from features.tickets.models.ticket import TicketTypeConfig, TicketTeam, TicketRecord
+from features.tickets.views._layout_helpers import header_items
 
 
 class SensitiveTicket(TicketTypeConfig):
@@ -16,6 +18,7 @@ class SensitiveTicket(TicketTypeConfig):
             TicketTeam(name="Senior Staff", role_id=senior_staff_role_id),
             TicketTeam(name="Owners", role_id=owner_role_id),
         ]
+        self._db_overrides: dict = {}
 
     @property
     def identifier(self) -> str:
@@ -23,15 +26,15 @@ class SensitiveTicket(TicketTypeConfig):
 
     @property
     def display_name(self) -> str:
-        return "Sensitive"
+        return self._db_overrides.get("display_name", "Sensitive")
 
     @property
     def description(self) -> str:
-        return "For sensitive matters requiring Senior Staff or Owner attention."
+        return self._db_overrides.get("description", "For sensitive matters requiring Senior Staff or Owner attention.")
 
     @property
     def emoji(self) -> str:
-        return "🔒"
+        return self._db_overrides.get("emoji", "🔒")
 
     @property
     def color(self) -> discord.Color:
@@ -58,7 +61,6 @@ class SensitiveTicket(TicketTypeConfig):
     ) -> dict[
         discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite
     ]:
-        # Override: only Senior Staff, Owners, and the creator can see this channel
         overwrites: dict[
             discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite
         ] = {}
@@ -90,18 +92,32 @@ class SensitiveTicket(TicketTypeConfig):
                 )
         return overwrites
 
-    def build_create_embed(self, record: TicketRecord) -> discord.Embed:
-        embed = discord.Embed(
-            title=f"{self.emoji} Sensitive Ticket - #{record.ticket_id:04d}",
-            description=(
-                "This ticket is only visible to Senior Staff and Owners.\n\n"
-                "Please describe your concern below. All information shared here is strictly confidential."
-            ),
-            color=self.color,
-            timestamp=datetime.now(UTC),
+    def build_create_layout(
+        self,
+        record: TicketRecord,
+        *,
+        header_attachment: str | None = None,
+        rank_images: dict[str, str] | None = None,
+    ) -> discord.ui.LayoutView:
+        view = discord.ui.LayoutView(timeout=None)
+        view.add_item(
+            discord.ui.Container(
+                *header_items(header_attachment),
+                discord.ui.TextDisplay(
+                    content=(
+                        f"## {self.emoji} Sensitive Ticket - #{record.ticket_id:04d}\n"
+                        f"**Opened by:** <@{record.creator.id}>\n\n"
+                        + (
+                            self.welcome_text
+                            or (
+                                "This ticket is only visible to Senior Staff and Owners.\n"
+                                "Please describe your concern below. All information shared here is strictly confidential.\n\n"
+                                "-# No transcripts are saved. And no records of the ticket are visible to other staff."
+                            )
+                        )
+                    )
+                ),
+                accent_colour=self.color,
+            )
         )
-        embed.add_field(name="Opened by", value=f"<@{record.creator.id}>", inline=True)
-        embed.set_footer(
-            text="This ticket will auto-close after 24 hours of inactivity."
-        )
-        return embed
+        return view

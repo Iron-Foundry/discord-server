@@ -1,66 +1,115 @@
+"""Closed ticket layout with reopen button - Discord Components V2."""
+
 from __future__ import annotations
 
-import discord
-from datetime import datetime, UTC
 from typing import TYPE_CHECKING
+
+import discord
+
+from features.tickets.views._layout_helpers import status_layout
 
 if TYPE_CHECKING:
     from features.tickets.ticket_service import TicketService
 
 
-class ReopenView(discord.ui.View):
-    """
-    Posted in the ticket channel after closure.
-    Any user with channel access (or staff) can click Reopen.
-    """
-
+class _ReopenButton(discord.ui.Button):
     def __init__(self, service: TicketService, ticket_id: int) -> None:
-        super().__init__(timeout=None)
+        super().__init__(
+            label="Reopen Ticket",
+            style=discord.ButtonStyle.success,
+            emoji="🔓",
+            custom_id=f"ticket_reopen_{ticket_id}",
+        )
         self._service = service
         self._ticket_id = ticket_id
 
-    @discord.ui.button(
-        label="Reopen Ticket",
-        style=discord.ButtonStyle.success,
-        emoji="🔓",
-    )
-    async def reopen_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:
-        if not isinstance(interaction.user, discord.Member):
-            await interaction.response.send_message(
-                "This can only be used in a server.", ephemeral=True
-            )
-            return
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if isinstance(interaction.user, discord.Member):
+            reopener = interaction.user
+        else:
+            reopener = self._service.guild.get_member(interaction.user.id)
+            if reopener is None:
+                try:
+                    reopener = await self._service.guild.fetch_member(interaction.user.id)
+                except discord.HTTPException:
+                    reopener = None
+            if reopener is None:
+                await interaction.response.send_message(
+                    view=status_layout("You must be a member of the server to reopen tickets."),
+                    ephemeral=True,
+                )
+                return
         await interaction.response.defer(ephemeral=True, thinking=True)
         new_channel = await self._service.reopen_ticket(
             ticket_id=self._ticket_id,
-            reopener=interaction.user,
+            reopener=reopener,
         )
         if new_channel:
-            button.disabled = True
             if interaction.message:
-                await interaction.message.edit(view=self)
+                # Disable reopen button after use
+                disabled_view = build_reopen_layout(
+                    self._service,
+                    self._ticket_id,
+                    reopener,
+                    None,
+                    disabled=True,
+                )
+                await interaction.message.edit(view=disabled_view)
             await interaction.followup.send(
-                f"Ticket reopened in {new_channel.mention}.", ephemeral=True
+                view=status_layout(f"Ticket reopened: {new_channel.mention}"),
+                ephemeral=True,
             )
         else:
             await interaction.followup.send(
-                "Failed to reopen the ticket.", ephemeral=True
+                view=status_layout("Failed to reopen the ticket."), ephemeral=True
             )
 
 
-def build_closed_embed(
-    ticket_id: int, closer: discord.Member, reason: str | None
-) -> discord.Embed:
-    embed = discord.Embed(
-        title="🔒 Ticket Closed",
-        description=(
-            f"This ticket was closed by {closer.mention}.\n\n"
-            + (f"**Reason:** {reason}" if reason else "")
-        ),
-        color=discord.Color.red(),
-        timestamp=datetime.now(UTC),
+def build_reopen_layout(
+    service: TicketService,
+    ticket_id: int,
+    closer: discord.Member,
+    reason: str | None,
+    *,
+    disabled: bool = False,
+) -> ReopenLayout:
+    return ReopenLayout(
+        service=service,
+        ticket_id=ticket_id,
+        closer=closer,
+        reason=reason,
+        disabled=disabled,
     )
-    embed.set_footer(text="Click the button below to reopen this ticket.")
-    return embed
+
+
+class ReopenLayout(discord.ui.LayoutView):
+    """Posted in DM after ticket closes. Persistent."""
+
+    def __init__(
+        self,
+        *,
+        service: TicketService,
+        ticket_id: int,
+        closer: discord.Member,
+        reason: str | None,
+        disabled: bool = False,
+    ) -> None:
+        super().__init__(timeout=None)
+        lines = [
+            f"## 🔒 Ticket #{ticket_id:04d} Closed",
+            f"Closed by {closer.mention}.",
+        ]
+        if reason:
+            lines.append(f"**Reason:** {reason}")
+
+        btn = _ReopenButton(service, ticket_id)
+        btn.disabled = disabled
+
+        self.add_item(
+            discord.ui.Container(
+                discord.ui.TextDisplay(content="\n".join(lines)),
+                discord.ui.Separator(),
+                discord.ui.ActionRow(btn),
+                accent_colour=discord.Color.red(),
+            )
+        )

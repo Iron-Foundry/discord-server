@@ -91,6 +91,30 @@ class TicketTypeConfig(ABC):
     """Abstract base class for all ticket types. Subclass this to add a new type."""
 
     enabled: bool = True
+    default_frozen: bool = False
+
+    def apply_overrides(self, overrides: dict) -> None:
+        """Apply DB-sourced config overrides. Called by post_ready after loading from DB.
+
+        Subclasses must read from ``self._db_overrides`` in their property getters.
+        """
+        self._db_overrides: dict = overrides
+        if "enabled" in overrides:
+            self.enabled = bool(overrides["enabled"])
+        if "max_open_per_user" in overrides:
+            self._max_open_per_user_override = int(overrides["max_open_per_user"])
+
+    @property
+    def max_open_per_user(self) -> int:
+        return getattr(self, "_max_open_per_user_override", None) or self._base_max_open_per_user
+
+    @property
+    def welcome_text(self) -> str:
+        return getattr(self, "_db_overrides", {}).get("welcome_text", "")
+
+    @property
+    def _base_max_open_per_user(self) -> int:
+        return 1
 
     # --- Required ---
 
@@ -137,11 +161,6 @@ class TicketTypeConfig(ABC):
         return None
 
     @property
-    def max_open_per_user(self) -> int:
-        """Max concurrent open tickets a single user may have of this type."""
-        return 1
-
-    @property
     def sensitive(self) -> bool:
         """If True, no transcript is collected or persisted for privacy."""
         return False
@@ -156,41 +175,41 @@ class TicketTypeConfig(ABC):
             emoji=self.emoji,
         )
 
-    # --- Embed builders ---
+    # --- Layout builders ---
 
     @abstractmethod
-    def build_create_embed(self, record: TicketRecord) -> discord.Embed:
-        """Embed posted inside the ticket channel on creation."""
+    def build_create_layout(
+        self,
+        record: TicketRecord,
+        *,
+        header_attachment: str | None = None,
+        rank_images: dict[str, str] | None = None,
+    ) -> discord.ui.LayoutView:
+        """Components V2 LayoutView posted inside the ticket channel on creation.
 
-    def build_close_embed(
-        self, record: TicketRecord, closer: discord.Member
-    ) -> discord.Embed:
-        embed = discord.Embed(
-            title=f"{self.emoji} Ticket #{record.ticket_id:04d} Closed",
-            description=f"**{self.display_name}** ticket has been closed.",
-            color=discord.Color.red(),
-            timestamp=datetime.now(UTC),
-        )
-        embed.add_field(name="Closed by", value=closer.mention, inline=True)
-        embed.add_field(name="Created by", value=f"<@{record.creator.id}>", inline=True)
-        embed.add_field(
-            name="Duration", value=self._format_duration(record), inline=True
-        )
-        if record.close_reason:
-            embed.add_field(name="Reason", value=record.close_reason, inline=False)
-        return embed
+        Args:
+            record: The ticket record.
+            header_attachment: Optional filename of an attached image to display
+                as a full-width banner at the top of the layout (e.g. ``"header.png"``).
+                Caller must include the corresponding ``discord.File`` in the message send.
+        """
 
-    def build_reopen_embed(
+    def build_reopen_layout(
         self, record: TicketRecord, reopener: discord.Member
-    ) -> discord.Embed:
-        embed = discord.Embed(
-            title=f"{self.emoji} Ticket #{record.ticket_id:04d} Reopened",
-            description=f"**{self.display_name}** ticket has been reopened.",
-            color=self.color,
-            timestamp=datetime.now(UTC),
+    ) -> discord.ui.LayoutView:
+        view = discord.ui.LayoutView(timeout=None)
+        view.add_item(
+            discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=(
+                        f"## {self.emoji} Ticket #{record.ticket_id:04d} Reopened\n"
+                        f"**{self.display_name}** ticket reopened by {reopener.mention}."
+                    )
+                ),
+                accent_colour=self.color,
+            )
         )
-        embed.add_field(name="Reopened by", value=reopener.mention, inline=True)
-        return embed
+        return view
 
     # --- Channel permissions ---
 
@@ -337,6 +356,8 @@ class Ticket:
             created_at=record.created_at,
         )
         self._timeout_task: asyncio.Task | None = None
+        self.sticky_message_id: int | None = None
+        self._sticky_task: asyncio.Task | None = None
 
     @classmethod
     def from_record(
@@ -366,6 +387,8 @@ class Ticket:
     async def collect_messages(self) -> None:
         try:
             async for message in self.channel.history(limit=None, oldest_first=True):
+                if message.author.bot:
+                    continue
                 entry = TranscriptEntry.from_discord_message(message)
                 self.transcript.add_entry(entry)
         except Exception as e:

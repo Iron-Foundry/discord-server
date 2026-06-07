@@ -1,7 +1,10 @@
+"""DM ticket menu - Discord Components V2."""
+
 from __future__ import annotations
 
 import discord
 from typing import TYPE_CHECKING
+
 
 if TYPE_CHECKING:
     from features.tickets.models.ticket import TicketRecord, TicketTypeConfig
@@ -10,61 +13,7 @@ if TYPE_CHECKING:
 _SELECT_TIMEOUT = 120
 
 
-class DMMenuView(discord.ui.View):
-    """Top-level DM menu with Open and Reopen buttons."""
-
-    def __init__(self, service: TicketService, member: discord.Member) -> None:
-        super().__init__(timeout=300)
-        self.add_item(OpenTicketButton(service, member))
-        self.add_item(ReopenTicketButton(service, member))
-
-
-class OpenTicketButton(discord.ui.Button):
-    """Sends a type-selection menu for creating a new ticket."""
-
-    def __init__(self, service: TicketService, member: discord.Member) -> None:
-        self._service = service
-        self._member = member
-        super().__init__(label="Open Ticket", style=discord.ButtonStyle.primary, row=0)
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        enabled_types = self._service.type_registry.get_enabled()
-        if not enabled_types:
-            await interaction.response.send_message(
-                "No ticket types are currently available."
-            )
-            return
-        view = OpenTypeSelectView(self._service, self._member, enabled_types)
-        await interaction.response.send_message(
-            "Select the type of ticket you'd like to open:", view=view
-        )
-
-
-class ReopenTicketButton(discord.ui.Button):
-    """Fetches the user's closed tickets and presents a reopen select menu."""
-
-    def __init__(self, service: TicketService, member: discord.Member) -> None:
-        self._service = service
-        self._member = member
-        super().__init__(
-            label="Reopen Ticket", style=discord.ButtonStyle.secondary, row=0
-        )
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer(thinking=True)
-        tickets = await self._service.get_closed_tickets_by_user(
-            self._member.id, limit=25
-        )
-        if not tickets:
-            await interaction.followup.send("You have no closed tickets to reopen.")
-            return
-        view = ReopenSelectView(self._service, self._member, tickets)
-        await interaction.followup.send("Select a ticket to reopen:", view=view)
-
-
-class OpenTypeSelect(discord.ui.Select):
-    """Dropdown of all currently enabled ticket types."""
-
+class _OpenTypeSelect(discord.ui.Select):
     def __init__(
         self,
         service: TicketService,
@@ -97,7 +46,6 @@ class OpenTypeSelect(discord.ui.Select):
                 "That ticket type is no longer available."
             )
             return
-
         modal = ticket_type.build_creation_modal(
             callback=lambda intr, meta: self._service.create_ticket(
                 intr, type_id, meta, creator_override=self._member
@@ -106,7 +54,6 @@ class OpenTypeSelect(discord.ui.Select):
         if modal is not None:
             await interaction.response.send_modal(modal)
             return
-
         await interaction.response.defer(thinking=True)
         ticket = await self._service.create_ticket(
             interaction, type_id, {}, creator_override=self._member
@@ -117,14 +64,11 @@ class OpenTypeSelect(discord.ui.Select):
             )
         else:
             await interaction.followup.send(
-                "Failed to create ticket. You may already have one open,"
-                " or please try again."
+                "Failed to create ticket. You may already have one open, or please try again."
             )
 
 
-class OpenTypeSelectView(discord.ui.View):
-    """Ephemeral wrapper view for the ticket type dropdown."""
-
+class _OpenTypeSelectView(discord.ui.View):
     def __init__(
         self,
         service: TicketService,
@@ -132,12 +76,10 @@ class OpenTypeSelectView(discord.ui.View):
         types: list[TicketTypeConfig],
     ) -> None:
         super().__init__(timeout=_SELECT_TIMEOUT)
-        self.add_item(OpenTypeSelect(service, member, types))
+        self.add_item(_OpenTypeSelect(service, member, types))
 
 
-class ReopenSelect(discord.ui.Select):
-    """Dropdown of the user's closed tickets."""
-
+class _ReopenSelect(discord.ui.Select):
     def __init__(
         self,
         service: TicketService,
@@ -172,13 +114,10 @@ class ReopenSelect(discord.ui.Select):
         else:
             await interaction.followup.send(
                 f"Could not reopen ticket **#{ticket_id:04d}**."
-                " It may not exist or may not be closed."
             )
 
 
-class ReopenSelectView(discord.ui.View):
-    """Ephemeral wrapper view for the reopen dropdown."""
-
+class _ReopenSelectView(discord.ui.View):
     def __init__(
         self,
         service: TicketService,
@@ -186,16 +125,71 @@ class ReopenSelectView(discord.ui.View):
         tickets: list[TicketRecord],
     ) -> None:
         super().__init__(timeout=_SELECT_TIMEOUT)
-        self.add_item(ReopenSelect(service, member, tickets))
+        self.add_item(_ReopenSelect(service, member, tickets))
 
 
-def build_dm_menu_embed() -> discord.Embed:
-    """Build the greeting embed shown at the top of the DM menu."""
-    return discord.Embed(
-        title="Iron Foundry - Ticket Support",
-        description=(
-            "Use the buttons below to open a new ticket or reopen a previous one.\n\n"
-            "Your ticket will be created in the Iron Foundry server."
-        ),
-        color=discord.Color.blurple(),
-    )
+class _OpenButton(discord.ui.Button):
+    def __init__(self, service: TicketService, member: discord.Member) -> None:
+        self._service = service
+        self._member = member
+        super().__init__(label="Open Ticket", style=discord.ButtonStyle.primary)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        enabled_types = self._service.type_registry.get_enabled()
+        if not enabled_types:
+            await interaction.response.send_message(
+                "No ticket types are currently available."
+            )
+            return
+        view = _OpenTypeSelectView(self._service, self._member, enabled_types)
+        await interaction.response.send_message(
+            "Select the type of ticket you'd like to open:", view=view
+        )
+
+
+class _ReopenButton(discord.ui.Button):
+    def __init__(self, service: TicketService, member: discord.Member) -> None:
+        self._service = service
+        self._member = member
+        super().__init__(label="Reopen Ticket", style=discord.ButtonStyle.secondary)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(thinking=True)
+        tickets = await self._service.get_closed_tickets_by_user(
+            self._member.id, limit=25
+        )
+        if not tickets:
+            await interaction.followup.send("You have no closed tickets to reopen.")
+            return
+        view = _ReopenSelectView(self._service, self._member, tickets)
+        await interaction.followup.send("Select a ticket to reopen:", view=view)
+
+
+def build_dm_menu_layout(
+    service: TicketService, member: discord.Member
+) -> DMMenuLayout:
+    return DMMenuLayout(service=service, member=member)
+
+
+class DMMenuLayout(discord.ui.LayoutView):
+    """DM ticket menu sent on incoming DM."""
+
+    def __init__(self, *, service: TicketService, member: discord.Member) -> None:
+        super().__init__(timeout=300)
+        self.add_item(
+            discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=(
+                        "## Iron Foundry - Ticket Support\n"
+                        "Use the buttons below to open a new ticket or reopen a previous one.\n"
+                        "Your ticket will be created in the Iron Foundry server."
+                    )
+                ),
+                discord.ui.Separator(),
+                discord.ui.ActionRow(
+                    _OpenButton(service, member),
+                    _ReopenButton(service, member),
+                ),
+                accent_colour=discord.Color.gold(),
+            )
+        )
