@@ -6,12 +6,16 @@ from typing import TYPE_CHECKING
 
 import discord
 
+from core.common.ticket_types import TicketTypeId
 from features.tickets.views.ticket_close import CloseButton
+from features.tickets.views.ticket_rank_pull import PullRankScoreButton
 from features.tickets.views.ticket_type_change import ChangeTypeButton
 from features.tickets.views.ticket_user_management import AddUserButton, RemoveUserButton
 
 if TYPE_CHECKING:
     from features.tickets.ticket_service import TicketService
+
+_RANK_TICKET_TYPES = {TicketTypeId.RANKUP.value, TicketTypeId.JOIN_CC.value}
 
 
 class _FreezeButton(discord.ui.Button):
@@ -66,7 +70,7 @@ class _FreezeButton(discord.ui.Button):
 def build_sticky_view(
     service: TicketService, ticket_type_id: str = "", *, is_frozen: bool = False
 ) -> TicketStickyView:
-    return TicketStickyView(service=service, is_frozen=is_frozen)
+    return TicketStickyView(service=service, ticket_type_id=ticket_type_id, is_frozen=is_frozen)
 
 
 class TicketStickyView(discord.ui.LayoutView):
@@ -76,20 +80,30 @@ class TicketStickyView(discord.ui.LayoutView):
         self,
         *,
         service: TicketService,
+        ticket_type_id: str = "",
         is_frozen: bool = False,
     ) -> None:
         super().__init__(timeout=None)
+        show_rank_pull = ticket_type_id in _RANK_TICKET_TYPES
+        standard_row = discord.ui.ActionRow(
+            CloseButton(service),
+            _FreezeButton(service, is_frozen),
+            ChangeTypeButton(service),
+            AddUserButton(service),
+            RemoveUserButton(service),
+        )
+        container_items: list[discord.ui.Item] = [
+            discord.ui.TextDisplay(content="### Ticket Toolbar"),
+            discord.ui.Separator(),
+            standard_row,
+        ]
+        if show_rank_pull:
+            container_items.append(
+                discord.ui.ActionRow(PullRankScoreButton(service))
+            )
         self.add_item(
             discord.ui.Container(
-                discord.ui.TextDisplay(content="### Ticket Toolbar"),
-                discord.ui.Separator(),
-                discord.ui.ActionRow(
-                    CloseButton(service),
-                    _FreezeButton(service, is_frozen),
-                    ChangeTypeButton(service),
-                    AddUserButton(service),
-                    RemoveUserButton(service),
-                ),
+                *container_items,
                 accent_colour=discord.Color.blurple(),
             )
         )

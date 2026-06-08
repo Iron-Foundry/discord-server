@@ -105,10 +105,15 @@ class TicketService(Service):
 
         Must be called from on_ready, after the guild cache is fully populated.
         """
-        # Register the global sticky view so existing sticky buttons work after restart
+        # Register the global sticky view so existing sticky buttons work after restart.
+        # Use a rank ticket type ID so PullRankScoreButton's custom_id is included,
+        # since its callback handles type validation internally.
+        from core.common.ticket_types import TicketTypeId as _TID
         from features.tickets.views.ticket_sticky import TicketStickyView
 
-        self._client.add_view(TicketStickyView(service=self))
+        self._client.add_view(
+            TicketStickyView(service=self, ticket_type_id=_TID.RANKUP.value)
+        )
 
         # Apply DB-sourced config overrides to all registered ticket types
         try:
