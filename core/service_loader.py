@@ -22,8 +22,10 @@ from core.command_infra.help_registry import HelpRegistry
 if TYPE_CHECKING:
     from features.action_log.service import ActionLogService
     from features.broadcast.service import BroadcastService
+    from features.competition_schedule.service import CompScheduleService
     from core.discord_client import DiscordClient
     from features.tickets.dm_service import DMTicketService
+    from features.info_panel.service import InfoPanelService
     from features.member.join_roles.service import JoinRoleService
     from features.parties.service import PartyService
     from features.member.roles.service import RoleService
@@ -183,6 +185,26 @@ async def load_user_key_service(
     return service
 
 
+async def load_info_panel_service(
+    guild: discord.Guild,
+    tree: app_commands.CommandTree,
+    session_factory: async_sessionmaker[AsyncSession],
+    client: DiscordClient,
+) -> "InfoPanelService":
+    """Initialise the info panel service and register /infopanel commands."""
+    from features.info_panel.commands import InfoPanelGroup
+    from features.info_panel.pg_repository import PgInfoPanelRepository
+    from features.info_panel.service import InfoPanelService
+
+    repo = PgInfoPanelRepository(session_factory=session_factory)
+    service = InfoPanelService(guild=guild, repo=repo, client=client)
+    await service.initialize()
+
+    tree.add_command(InfoPanelGroup(service=service), guild=guild)
+    logger.info("Info panel service initialised and /infopanel commands registered")
+    return service
+
+
 async def load_party_service(
     guild: discord.Guild,
     tree: app_commands.CommandTree,
@@ -200,6 +222,19 @@ async def load_party_service(
 
     tree.add_command(PartyGroup(service=service), guild=guild)
     logger.info("Party service initialised and /party commands registered")
+    return service
+
+
+async def load_competition_schedule_service(
+    guild: discord.Guild,
+    client: "DiscordClient",
+) -> "CompScheduleService":
+    """Initialise the competition schedule service."""
+    from features.competition_schedule.service import CompScheduleService
+
+    service = CompScheduleService(guild=guild, client=client)
+    await service.initialize()
+    logger.info("Competition schedule service initialised")
     return service
 
 
@@ -243,6 +278,8 @@ async def load_all_services(
     DMTicketService,
     "UserKeyService",
     "PartyService",
+    "InfoPanelService",
+    "CompScheduleService",
 ]:
     """Load all services, then register the help command.
 
@@ -258,6 +295,8 @@ async def load_all_services(
         load_join_role_service(guild, tree, registry, session_factory, client),
         load_user_key_service(guild, tree, session_factory, client),
         load_party_service(guild, tree, session_factory, client),
+        load_info_panel_service(guild, tree, session_factory, client),
+        load_competition_schedule_service(guild, client),
     )
     ticket = cast("TicketService", _results[0])
     role = cast("RoleService", _results[1])
@@ -266,6 +305,8 @@ async def load_all_services(
     join_role = cast("JoinRoleService", _results[4])
     user_keys = cast("UserKeyService", _results[5])
     parties = cast("PartyService", _results[6])
+    info_panel = cast("InfoPanelService", _results[7])
+    comp_schedule = cast("CompScheduleService", _results[8])
 
     dm_ticket = await load_dm_ticket_service(guild, ticket)
 
@@ -279,4 +320,6 @@ async def load_all_services(
         dm_ticket,
         user_keys,
         parties,
+        info_panel,
+        comp_schedule,
     )
