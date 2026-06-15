@@ -66,6 +66,11 @@ class JoinCCTicket(TicketTypeConfig):
                     f"**Applicant:** <@{record.creator.id}>\n\n"
                     f"{welcome}\n\n"
                     "-# This ticket will auto-close after 24 hours of inactivity."
+                    + (
+                        " · Auto-created on server join."
+                        if record.metadata.get("auto_created")
+                        else ""
+                    )
                 )
             ),
         ]

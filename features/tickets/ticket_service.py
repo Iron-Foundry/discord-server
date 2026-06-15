@@ -264,7 +264,7 @@ class TicketService(Service):
 
     async def create_ticket(
         self,
-        interaction: discord.Interaction,
+        interaction: discord.Interaction | None,
         type_id: str,
         metadata: dict[str, Any],
         *,
@@ -272,17 +272,19 @@ class TicketService(Service):
     ) -> Ticket | None:
         """Create a new ticket channel and persist the record.
 
-        Called from the panel select callback, ``/ticket open``, and the DM
-        ticket menu.  Pass ``creator_override`` when the interaction user is
-        a :class:`discord.User` rather than a :class:`discord.Member` (e.g.
-        when the interaction originates from a DM).
+        Called from the panel select callback, ``/ticket open``, the DM
+        ticket menu, and automated triggers (e.g. member join).  Pass
+        ``creator_override`` when the interaction user is a
+        :class:`discord.User` rather than a :class:`discord.Member` (e.g.
+        when the interaction originates from a DM), or pass ``interaction=None``
+        with ``creator_override`` set for non-interaction flows.
         """
         ticket_type = self.type_registry.get(type_id)
         if not ticket_type or not ticket_type.enabled:
             logger.error(f"create_ticket: unknown or disabled type '{type_id}'")
             return None
 
-        creator = creator_override or interaction.user
+        creator = creator_override or (interaction.user if interaction else None)
         if not isinstance(creator, discord.Member):
             return None
 

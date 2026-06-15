@@ -45,6 +45,7 @@ async def load_ticket_service(
     from core.command_infra.handlers import register_help as register_handler_help
     from features.tickets.commands import TicketGroup, TicketTypeGroup
     from features.tickets.commands import register_help as register_ticket_help
+    from features.tickets.events import register as register_ticket_events
     from features.tickets.handlers.pg_repository import PgTicketRepository
     from features.tickets.ticket_service import TicketService
     from features.tickets.types import register_all_types
@@ -54,6 +55,7 @@ async def load_ticket_service(
     register_all_types(service)
     await service.initialize()
 
+    register_ticket_events(service, client)
     register_ticket_help(registry)
     register_handler_help(registry)
     tree.add_command(TicketGroup(service=service), guild=guild)
