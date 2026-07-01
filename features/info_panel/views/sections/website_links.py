@@ -5,7 +5,9 @@ import discord
 from features.info_panel.models import WebsiteLinksSection
 
 
-def build(section: WebsiteLinksSection, live_data: dict, guild: discord.Guild) -> list[discord.ui.Item]:
+def build(
+    section: WebsiteLinksSection, live_data: dict, guild: discord.Guild
+) -> list[discord.ui.Item]:
     items: list[discord.ui.Item] = [
         discord.ui.TextDisplay(content="## Links & Info"),
     ]

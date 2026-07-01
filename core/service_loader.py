@@ -21,6 +21,7 @@ from core.command_infra.help_registry import HelpRegistry
 
 if TYPE_CHECKING:
     from features.action_log.service import ActionLogService
+    from features.admin.service import AdminService
     from features.broadcast.service import BroadcastService
     from features.competition_schedule.service import CompScheduleService
     from core.discord_client import DiscordClient
@@ -227,6 +228,23 @@ async def load_party_service(
     return service
 
 
+async def load_admin_service(
+    guild: discord.Guild,
+    tree: app_commands.CommandTree,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> "AdminService":
+    """Initialise the admin service and register /admin commands."""
+    from features.admin.commands import AdminGroup
+    from features.admin.service import AdminService
+
+    service = AdminService(guild=guild, session_factory=session_factory)
+    await service.initialize()
+
+    tree.add_command(AdminGroup(service=service), guild=guild)
+    logger.info("Admin service initialised and /admin commands registered")
+    return service
+
+
 async def load_competition_schedule_service(
     guild: discord.Guild,
     client: "DiscordClient",
@@ -282,6 +300,7 @@ async def load_all_services(
     "PartyService",
     "InfoPanelService",
     "CompScheduleService",
+    "AdminService",
 ]:
     """Load all services, then register the help command.
 
@@ -299,6 +318,7 @@ async def load_all_services(
         load_party_service(guild, tree, session_factory, client),
         load_info_panel_service(guild, tree, session_factory, client),
         load_competition_schedule_service(guild, client),
+        load_admin_service(guild, tree, session_factory),
     )
     ticket = cast("TicketService", _results[0])
     role = cast("RoleService", _results[1])
@@ -309,6 +329,7 @@ async def load_all_services(
     parties = cast("PartyService", _results[6])
     info_panel = cast("InfoPanelService", _results[7])
     comp_schedule = cast("CompScheduleService", _results[8])
+    admin = cast("AdminService", _results[9])
 
     dm_ticket = await load_dm_ticket_service(guild, ticket)
 
@@ -324,4 +345,5 @@ async def load_all_services(
         parties,
         info_panel,
         comp_schedule,
+        admin,
     )

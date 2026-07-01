@@ -12,7 +12,9 @@ if TYPE_CHECKING:
 
 class _AddUserSelect(discord.ui.UserSelect):
     def __init__(self, service: TicketService, channel_id: int) -> None:
-        super().__init__(placeholder="Select a user to add...", min_values=1, max_values=1)
+        super().__init__(
+            placeholder="Select a user to add...", min_values=1, max_values=1
+        )
         self._service = service
         self._channel_id = channel_id
 
@@ -35,7 +37,9 @@ class _AddUserSelect(discord.ui.UserSelect):
                 f"Added {user.mention} to the ticket.", ephemeral=True
             )
         else:
-            await interaction.response.send_message("Failed to add user.", ephemeral=True)
+            await interaction.response.send_message(
+                "Failed to add user.", ephemeral=True
+            )
 
 
 class _RemoveUserSelect(discord.ui.UserSelect):
@@ -87,8 +91,12 @@ class AddUserButton(discord.ui.Button):
             )
             return
         ticket = self._service.get_ticket_by_channel(interaction.channel_id)
-        if not ticket or not isinstance(interaction.user, discord.Member) or not any(
-            team.is_member(interaction.user) for team in ticket.ticket_type.teams
+        if (
+            not ticket
+            or not isinstance(interaction.user, discord.Member)
+            or not any(
+                team.is_member(interaction.user) for team in ticket.ticket_type.teams
+            )
         ):
             await interaction.response.send_message("Staff only.", ephemeral=True)
             return
@@ -116,8 +124,12 @@ class RemoveUserButton(discord.ui.Button):
             )
             return
         ticket = self._service.get_ticket_by_channel(interaction.channel_id)
-        if not ticket or not isinstance(interaction.user, discord.Member) or not any(
-            team.is_member(interaction.user) for team in ticket.ticket_type.teams
+        if (
+            not ticket
+            or not isinstance(interaction.user, discord.Member)
+            or not any(
+                team.is_member(interaction.user) for team in ticket.ticket_type.teams
+            )
         ):
             await interaction.response.send_message("Staff only.", ephemeral=True)
             return

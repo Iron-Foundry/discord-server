@@ -5,7 +5,9 @@ import discord
 from features.info_panel.models import ChannelTocSection
 
 
-def build(section: ChannelTocSection, live_data: dict, guild: discord.Guild) -> list[discord.ui.Item]:
+def build(
+    section: ChannelTocSection, live_data: dict, guild: discord.Guild
+) -> list[discord.ui.Item]:
     if not section.channels:
         return []
 

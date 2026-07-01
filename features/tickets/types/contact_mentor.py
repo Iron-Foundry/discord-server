@@ -78,7 +78,9 @@ class ContactMentorTicket(TicketTypeConfig):
 
     @property
     def description(self) -> str:
-        return self._db_overrides.get("description", "Get help from a mentor with Raids & PVM.")
+        return self._db_overrides.get(
+            "description", "Get help from a mentor with Raids & PVM."
+        )
 
     @property
     def emoji(self) -> str:

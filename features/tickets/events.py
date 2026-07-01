@@ -26,6 +26,8 @@ def register(service: TicketService, client: DiscordClient) -> None:
             creator_override=member,
         )
         if ticket is None:
-            logger.warning(f"Tickets[events]: failed to open join_cc ticket for {member}")
+            logger.warning(
+                f"Tickets[events]: failed to open join_cc ticket for {member}"
+            )
 
     client.add_listener(on_member_join, "on_member_join")

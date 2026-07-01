@@ -106,7 +106,10 @@ class TicketTypeConfig(ABC):
 
     @property
     def max_open_per_user(self) -> int:
-        return getattr(self, "_max_open_per_user_override", None) or self._base_max_open_per_user
+        return (
+            getattr(self, "_max_open_per_user_override", None)
+            or self._base_max_open_per_user
+        )
 
     @property
     def welcome_text(self) -> str:

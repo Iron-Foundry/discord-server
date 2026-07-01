@@ -74,7 +74,9 @@ def build_views(
             if not section_items:
                 continue
 
-            non_rows = [it for it in section_items if not isinstance(it, discord.ui.ActionRow)]
+            non_rows = [
+                it for it in section_items if not isinstance(it, discord.ui.ActionRow)
+            ]
             rows = [it for it in section_items if isinstance(it, discord.ui.ActionRow)]
 
             if container_items and non_rows:

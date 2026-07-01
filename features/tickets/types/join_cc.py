@@ -24,7 +24,9 @@ class JoinCCTicket(TicketTypeConfig):
 
     @property
     def description(self) -> str:
-        return self._db_overrides.get("description", "Apply to join the Iron Foundry clan chat.")
+        return self._db_overrides.get(
+            "description", "Apply to join the Iron Foundry clan chat."
+        )
 
     @property
     def emoji(self) -> str:
@@ -87,7 +89,11 @@ class JoinCCTicket(TicketTypeConfig):
                 )
             if fn := rank_images.get("rank_upgrades"):
                 children.append(discord.ui.Separator())
-                children.append(discord.ui.TextDisplay(content="### Valid Item & Requirement Upgrades:"))
+                children.append(
+                    discord.ui.TextDisplay(
+                        content="### Valid Item & Requirement Upgrades:"
+                    )
+                )
                 children.append(
                     discord.ui.MediaGallery(
                         discord.MediaGalleryItem(

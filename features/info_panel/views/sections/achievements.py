@@ -37,7 +37,9 @@ def _fmt_value(event_type: str, value: int | None) -> str:
     return ""
 
 
-def build(section: AchievementsSection, live_data: dict, guild: discord.Guild) -> list[discord.ui.Item]:
+def build(
+    section: AchievementsSection, live_data: dict, guild: discord.Guild
+) -> list[discord.ui.Item]:
     achievements: list[dict] = live_data.get("achievements") or []
     shown = achievements[: section.count]
 

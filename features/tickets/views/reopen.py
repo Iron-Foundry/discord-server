@@ -30,12 +30,16 @@ class _ReopenButton(discord.ui.Button):
             reopener = self._service.guild.get_member(interaction.user.id)
             if reopener is None:
                 try:
-                    reopener = await self._service.guild.fetch_member(interaction.user.id)
+                    reopener = await self._service.guild.fetch_member(
+                        interaction.user.id
+                    )
                 except discord.HTTPException:
                     reopener = None
             if reopener is None:
                 await interaction.response.send_message(
-                    view=status_layout("You must be a member of the server to reopen tickets."),
+                    view=status_layout(
+                        "You must be a member of the server to reopen tickets."
+                    ),
                     ephemeral=True,
                 )
                 return

@@ -14,18 +14,24 @@ if TYPE_CHECKING:
     from features.info_panel.service import InfoPanelService
 
 
-class InfoPanelGroup(app_commands.Group, name="infopanel", description="Info panel management"):
+class InfoPanelGroup(
+    app_commands.Group, name="infopanel", description="Info panel management"
+):
     def __init__(self, service: InfoPanelService) -> None:
         super().__init__()
         self._service = service
 
-    async def on_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
+    async def on_error(
+        self, interaction: discord.Interaction, error: app_commands.AppCommandError
+    ) -> None:
         await handle_check_failure(interaction, error)
 
     @app_commands.command(name="post", description="Post the info panel in a channel.")
     @app_commands.describe(channel="Channel to post the info panel in")
     @is_staff()
-    async def post(self, interaction: discord.Interaction, channel: discord.TextChannel) -> None:
+    async def post(
+        self, interaction: discord.Interaction, channel: discord.TextChannel
+    ) -> None:
         await interaction.response.defer(ephemeral=True, thinking=True)
         if self._service._messages:
             await interaction.followup.send(
@@ -36,14 +42,18 @@ class InfoPanelGroup(app_commands.Group, name="infopanel", description="Info pan
             await self._service.post_panel(channel)
         except Exception as exc:
             logger.exception("InfoPanel: post failed in #{}: {}", channel.name, exc)
-            await interaction.followup.send(f"Failed to post panel: `{exc}`", ephemeral=True)
+            await interaction.followup.send(
+                f"Failed to post panel: `{exc}`", ephemeral=True
+            )
             return
         await interaction.followup.send(
             f"Info panel posted in {channel.mention}.", ephemeral=True
         )
         logger.info("InfoPanel: {} posted panel in #{}", interaction.user, channel.name)
 
-    @app_commands.command(name="refresh", description="Refresh the info panel with latest data.")
+    @app_commands.command(
+        name="refresh", description="Refresh the info panel with latest data."
+    )
     @is_staff()
     async def refresh(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True, thinking=True)

@@ -30,7 +30,10 @@ class SensitiveTicket(TicketTypeConfig):
 
     @property
     def description(self) -> str:
-        return self._db_overrides.get("description", "For sensitive matters requiring Senior Staff or Owner attention.")
+        return self._db_overrides.get(
+            "description",
+            "For sensitive matters requiring Senior Staff or Owner attention.",
+        )
 
     @property
     def emoji(self) -> str:

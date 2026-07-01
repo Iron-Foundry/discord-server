@@ -19,7 +19,9 @@ def _ts(iso: str | None) -> str:
         return ""
 
 
-def build(section: NameChangesSection, live_data: dict, guild: discord.Guild) -> list[discord.ui.Item]:
+def build(
+    section: NameChangesSection, live_data: dict, guild: discord.Guild
+) -> list[discord.ui.Item]:
     changes: list[dict] = live_data.get("name_changes") or []
     shown = changes[: section.count]
 

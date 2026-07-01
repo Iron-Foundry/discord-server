@@ -103,9 +103,7 @@ class CompScheduleService(Service):
             try:
                 async with client.pubsub() as ps:
                     await ps.subscribe(_CH_CLOSE_POLL)
-                    logger.info(
-                        "CompScheduleService: subscribed to {}", _CH_CLOSE_POLL
-                    )
+                    logger.info("CompScheduleService: subscribed to {}", _CH_CLOSE_POLL)
                     async for raw in ps.listen():
                         if raw["type"] != "message":
                             continue

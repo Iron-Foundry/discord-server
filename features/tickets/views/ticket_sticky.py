@@ -10,7 +10,10 @@ from core.common.ticket_types import TicketTypeId
 from features.tickets.views.ticket_close import CloseButton
 from features.tickets.views.ticket_rank_pull import PullRankScoreButton
 from features.tickets.views.ticket_type_change import ChangeTypeButton
-from features.tickets.views.ticket_user_management import AddUserButton, RemoveUserButton
+from features.tickets.views.ticket_user_management import (
+    AddUserButton,
+    RemoveUserButton,
+)
 
 if TYPE_CHECKING:
     from features.tickets.ticket_service import TicketService
@@ -70,7 +73,9 @@ class _FreezeButton(discord.ui.Button):
 def build_sticky_view(
     service: TicketService, ticket_type_id: str = "", *, is_frozen: bool = False
 ) -> TicketStickyView:
-    return TicketStickyView(service=service, ticket_type_id=ticket_type_id, is_frozen=is_frozen)
+    return TicketStickyView(
+        service=service, ticket_type_id=ticket_type_id, is_frozen=is_frozen
+    )
 
 
 class TicketStickyView(discord.ui.LayoutView):
@@ -98,9 +103,7 @@ class TicketStickyView(discord.ui.LayoutView):
             standard_row,
         ]
         if show_rank_pull:
-            container_items.append(
-                discord.ui.ActionRow(PullRankScoreButton(service))
-            )
+            container_items.append(discord.ui.ActionRow(PullRankScoreButton(service)))
         self.add_item(
             discord.ui.Container(
                 *container_items,

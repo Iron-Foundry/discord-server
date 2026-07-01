@@ -81,7 +81,9 @@ def build_panel_layout(
 class TicketPanelLayoutView(discord.ui.LayoutView):
     """Persistent panel - rebuilt whenever types are enabled/disabled."""
 
-    def __init__(self, *, service: TicketService, header_filename: str | None = None) -> None:
+    def __init__(
+        self, *, service: TicketService, header_filename: str | None = None
+    ) -> None:
         super().__init__(timeout=None)
         enabled = service.type_registry.get_enabled()
 

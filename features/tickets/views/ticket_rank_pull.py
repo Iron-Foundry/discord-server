@@ -25,7 +25,9 @@ async def _get_rank_pull_set_primary() -> bool:
     try:
         async with get_session_factory()() as session:
             result = await session.execute(
-                select(Config.value).where(Config.guild_id == 0, Config.key == "ticket_features")
+                select(Config.value).where(
+                    Config.guild_id == 0, Config.key == "ticket_features"
+                )
             )
             data = result.scalar_one_or_none() or {}
             return bool(data.get("rank_pull_set_primary", False))
@@ -77,16 +79,18 @@ async def _set_primary_account(member: discord.Member, rsn: str) -> bool:
             )
             if user_exists.scalar_one_or_none() is None:
                 role_ids = [str(r.id) for r in member.roles if r.name != "@everyone"]
-                session.add(User(
-                    discord_user_id=discord_user_id,
-                    discord_username=member.name,
-                    discord_avatar_url=str(member.display_avatar.url),
-                    guild_id=member.guild.id,
-                    rsn=rsn,
-                    discord_roles=role_ids,
-                    created_at=now,
-                    updated_at=now,
-                ))
+                session.add(
+                    User(
+                        discord_user_id=discord_user_id,
+                        discord_username=member.name,
+                        discord_avatar_url=str(member.display_avatar.url),
+                        guild_id=member.guild.id,
+                        rsn=rsn,
+                        discord_roles=role_ids,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
 
             existing_account = await session.execute(
                 select(UserAccount).where(
@@ -96,12 +100,14 @@ async def _set_primary_account(member: discord.Member, rsn: str) -> bool:
             )
             account = existing_account.scalar_one_or_none()
             if account is None:
-                session.add(UserAccount(
-                    discord_user_id=discord_user_id,
-                    rsn=rsn,
-                    is_primary=True,
-                    created_at=now,
-                ))
+                session.add(
+                    UserAccount(
+                        discord_user_id=discord_user_id,
+                        rsn=rsn,
+                        is_primary=True,
+                        created_at=now,
+                    )
+                )
             else:
                 account.is_primary = True
                 await session.execute(
@@ -137,26 +143,30 @@ async def _build_rank_score_chart(
         _SKILL_COLOR = "#57F287"
 
         fig = go.Figure()
-        fig.add_trace(go.Bar(
-            name="Boss Points",
-            x=[boss_points],
-            y=[rsn],
-            orientation="h",
-            marker_color=_BOSS_COLOR,
-            text=[f"{boss_points:,}"],
-            textposition="inside",
-            textfont={"color": _TEXT},
-        ))
-        fig.add_trace(go.Bar(
-            name="Skill Points",
-            x=[skill_points],
-            y=[rsn],
-            orientation="h",
-            marker_color=_SKILL_COLOR,
-            text=[f"{skill_points:,}"],
-            textposition="inside",
-            textfont={"color": "#1a1a2e"},
-        ))
+        fig.add_trace(
+            go.Bar(
+                name="Boss Points",
+                x=[boss_points],
+                y=[rsn],
+                orientation="h",
+                marker_color=_BOSS_COLOR,
+                text=[f"{boss_points:,}"],
+                textposition="inside",
+                textfont={"color": _TEXT},
+            )
+        )
+        fig.add_trace(
+            go.Bar(
+                name="Skill Points",
+                x=[skill_points],
+                y=[rsn],
+                orientation="h",
+                marker_color=_SKILL_COLOR,
+                text=[f"{skill_points:,}"],
+                textposition="inside",
+                textfont={"color": "#1a1a2e"},
+            )
+        )
 
         fig.update_layout(
             barmode="stack",
@@ -164,24 +174,34 @@ async def _build_rank_score_chart(
             plot_bgcolor=_BG,
             font={"color": _TEXT, "family": "Arial, sans-serif"},
             margin={"l": 80, "r": 120, "t": 60, "b": 40},
-            xaxis={"gridcolor": _GRID, "zerolinecolor": _GRID, "tickfont": {"color": _TEXT}},
-            yaxis={"gridcolor": _GRID, "zerolinecolor": _GRID, "tickfont": {"color": _TEXT}},
+            xaxis={
+                "gridcolor": _GRID,
+                "zerolinecolor": _GRID,
+                "tickfont": {"color": _TEXT},
+            },
+            yaxis={
+                "gridcolor": _GRID,
+                "zerolinecolor": _GRID,
+                "tickfont": {"color": _TEXT},
+            },
             legend={"orientation": "h", "x": 0, "y": -0.15, "font": {"color": _TEXT}},
             title={
                 "text": f"{rsn} - {rank} ({points:,} pts total)",
                 "font": {"color": _TEXT, "size": 16},
                 "x": 0.5,
             },
-            annotations=[{
-                "x": 1.01,
-                "y": 0.5,
-                "xref": "paper",
-                "yref": "paper",
-                "xanchor": "left",
-                "text": f"<b>{points:,}</b><br>Total",
-                "showarrow": False,
-                "font": {"color": _TEXT, "size": 13},
-            }],
+            annotations=[
+                {
+                    "x": 1.01,
+                    "y": 0.5,
+                    "xref": "paper",
+                    "yref": "paper",
+                    "xanchor": "left",
+                    "text": f"<b>{points:,}</b><br>Total",
+                    "showarrow": False,
+                    "font": {"color": _TEXT, "size": 13},
+                }
+            ],
         )
 
         img_bytes: bytes = await asyncio.to_thread(
@@ -259,7 +279,9 @@ class RsnModal(discord.ui.Modal, title="Pull Rank Score"):
         skill_points: int = data.get("skill_points", 0)
         stats_opt_out: bool = data.get("stats_opt_out", False)
 
-        chart_file = await _build_rank_score_chart(rsn, rank, points, boss_points, skill_points)
+        chart_file = await _build_rank_score_chart(
+            rsn, rank, points, boss_points, skill_points
+        )
 
         embed = discord.Embed(
             title=f"Rank Score - {rsn}",
@@ -312,7 +334,8 @@ class RsnModal(discord.ui.Modal, title="Pull Rank Score"):
                     )
             else:
                 logger.warning(
-                    "Rank pull: could not fetch creator member {} for primary set", creator_id
+                    "Rank pull: could not fetch creator member {} for primary set",
+                    creator_id,
                 )
 
         await interaction.followup.send("Rank score posted.", ephemeral=True)

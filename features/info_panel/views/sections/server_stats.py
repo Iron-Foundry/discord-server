@@ -9,7 +9,9 @@ def _fmt_num(n: int | float) -> str:
     return f"{int(n):,}"
 
 
-def build(section: ServerStatsSection, live_data: dict, guild: discord.Guild) -> list[discord.ui.Item]:
+def build(
+    section: ServerStatsSection, live_data: dict, guild: discord.Guild
+) -> list[discord.ui.Item]:
     wom = live_data.get("wom_stats") or {}
     clan = live_data.get("clan_stats") or {}
     ranking = live_data.get("ranking_stats") or {}

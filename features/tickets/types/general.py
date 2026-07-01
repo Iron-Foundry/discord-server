@@ -24,7 +24,9 @@ class GeneralTicket(TicketTypeConfig):
 
     @property
     def description(self) -> str:
-        return self._db_overrides.get("description", "General questions and miscellaneous requests.")
+        return self._db_overrides.get(
+            "description", "General questions and miscellaneous requests."
+        )
 
     @property
     def emoji(self) -> str:

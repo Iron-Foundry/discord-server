@@ -123,9 +123,14 @@ class TicketService(Service):
                 if type_overrides:
                     ticket_type.apply_overrides(type_overrides)
             if overrides:
-                logger.info("TicketService: applied DB config overrides for {} types", len(overrides))
+                logger.info(
+                    "TicketService: applied DB config overrides for {} types",
+                    len(overrides),
+                )
         except Exception as exc:
-            logger.warning("TicketService: could not load type config overrides: {}", exc)
+            logger.warning(
+                "TicketService: could not load type config overrides: {}", exc
+            )
 
         self._config_refresh_task = asyncio.create_task(
             self._config_refresh_subscriber(), name="ticket-config-refresh-subscriber"
@@ -187,7 +192,9 @@ class TicketService(Service):
         hdr = await self.repo.get_header_image(self.guild.id, "panel")
         send_kwargs: dict = {}
         if hdr:
-            send_kwargs["files"] = [discord.File(io.BytesIO(hdr["data"]), filename=hdr["filename"])]
+            send_kwargs["files"] = [
+                discord.File(io.BytesIO(hdr["data"]), filename=hdr["filename"])
+            ]
             self._panel_header_filename = hdr["filename"]
         else:
             self._panel_header_filename = None
@@ -253,7 +260,9 @@ class TicketService(Service):
 
         try:
             await self._panel_message.edit(
-                view=build_panel_layout(self, header_filename=self._panel_header_filename)
+                view=build_panel_layout(
+                    self, header_filename=self._panel_header_filename
+                )
             )
         except discord.NotFound:
             logger.warning("Panel message no longer exists; panel not refreshed")
@@ -352,28 +361,45 @@ class TicketService(Service):
             await self.repo.save_ticket(record)
 
             import io
+
             header_file: discord.File | None = None
             header_attachment: str | None = None
             try:
                 hdr = await self.repo.get_header_image(self.guild.id, type_id)
                 if hdr:
-                    header_file = discord.File(io.BytesIO(hdr["data"]), filename=hdr["filename"])
+                    header_file = discord.File(
+                        io.BytesIO(hdr["data"]), filename=hdr["filename"]
+                    )
                     header_attachment = hdr["filename"]
             except Exception as exc:
-                logger.warning("Ticket #{}: could not load header image: {}", ticket_id, exc)
+                logger.warning(
+                    "Ticket #{}: could not load header image: {}", ticket_id, exc
+                )
 
             rank_files: list[discord.File] = []
             rank_images: dict[str, str] = {}
             from core.common.ticket_types import TicketTypeId as _TID
+
             if type_id in {_TID.RANKUP.value, _TID.JOIN_CC.value}:
                 for img_name in ("rank_reqs", "rank_upgrades"):
                     try:
-                        img = await self.repo.get_image(self.guild.id, type_id, img_name)
+                        img = await self.repo.get_image(
+                            self.guild.id, type_id, img_name
+                        )
                         if img:
-                            rank_files.append(discord.File(io.BytesIO(img["data"]), filename=img["filename"]))
+                            rank_files.append(
+                                discord.File(
+                                    io.BytesIO(img["data"]), filename=img["filename"]
+                                )
+                            )
                             rank_images[img_name] = img["filename"]
                     except Exception as exc:
-                        logger.warning("Ticket #{}: could not load rank image '{}': {}", ticket_id, img_name, exc)
+                        logger.warning(
+                            "Ticket #{}: could not load rank image '{}': {}",
+                            ticket_id,
+                            img_name,
+                            exc,
+                        )
 
             all_files = ([header_file] if header_file else []) + rank_files
             create_kwargs: dict = {}
@@ -1045,7 +1071,9 @@ class TicketService(Service):
 
         valkey_uri = os.getenv("VALKEY_URI", "redis://localhost:6379")
         while True:
-            client: ValkeyClient = ValkeyClient.from_url(valkey_uri, socket_timeout=None)
+            client: ValkeyClient = ValkeyClient.from_url(
+                valkey_uri, socket_timeout=None
+            )
             try:
                 async with client.pubsub() as ps:
                     await ps.subscribe("ticket:config:refresh")
@@ -1054,10 +1082,18 @@ class TicketService(Service):
                         if raw["type"] != "message":
                             continue
                         try:
-                            data = json.loads(raw["data"]) if isinstance(raw["data"], (str, bytes)) else {}
-                            overrides = await self.repo.get_type_config_overrides(self.guild.id)
+                            data = (
+                                json.loads(raw["data"])
+                                if isinstance(raw["data"], (str, bytes))
+                                else {}
+                            )
+                            overrides = await self.repo.get_type_config_overrides(
+                                self.guild.id
+                            )
                             for ticket_type in self.type_registry.get_all():
-                                ticket_type.apply_overrides(overrides.get(ticket_type.identifier, {}))
+                                ticket_type.apply_overrides(
+                                    overrides.get(ticket_type.identifier, {})
+                                )
                             if data.get("type_id") == "panel" and self._panel_channel:
                                 if self._panel_message:
                                     try:
@@ -1073,7 +1109,9 @@ class TicketService(Service):
                                 data.get("type_id", "?"),
                             )
                         except Exception as exc:
-                            logger.warning("TicketService: config refresh error - {}", exc)
+                            logger.warning(
+                                "TicketService: config refresh error - {}", exc
+                            )
             except asyncio.CancelledError:
                 logger.info("TicketService: config refresh subscriber shutting down")
                 await client.aclose()

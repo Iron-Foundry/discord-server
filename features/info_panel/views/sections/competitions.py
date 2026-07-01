@@ -48,12 +48,22 @@ def build(
         url = f"{_WEB_APP_URL}/competitions/{comp_id}" if comp_id is not None else ""
 
         if status == "ongoing":
-            ends_ms = int(datetime.fromisoformat(comp["endsAt"].replace("Z", "+00:00")).timestamp() * 1000)
+            ends_ms = int(
+                datetime.fromisoformat(
+                    comp["endsAt"].replace("Z", "+00:00")
+                ).timestamp()
+                * 1000
+            )
             remaining = max(0, ends_ms - now_ms)
             lines.append(f"🟢 `{title}` · {metric} · ends in {_time_left(remaining)}")
             label = f"🟢 {title}"
         else:
-            starts_ms = int(datetime.fromisoformat(comp["startsAt"].replace("Z", "+00:00")).timestamp() * 1000)
+            starts_ms = int(
+                datetime.fromisoformat(
+                    comp["startsAt"].replace("Z", "+00:00")
+                ).timestamp()
+                * 1000
+            )
             remaining = max(0, starts_ms - now_ms)
             lines.append(f"🔵 `{title}` · {metric} · starts in {_time_left(remaining)}")
             label = f"🔵 {title}"

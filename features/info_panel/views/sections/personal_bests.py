@@ -27,7 +27,9 @@ def _ts(iso: str | None) -> str:
         return ""
 
 
-def build(section: PersonalBestsSection, live_data: dict, guild: discord.Guild) -> list[discord.ui.Item]:
+def build(
+    section: PersonalBestsSection, live_data: dict, guild: discord.Guild
+) -> list[discord.ui.Item]:
     pbs: list[dict] = live_data.get("personal_bests") or []
     shown = pbs[: section.count]
 
@@ -41,7 +43,9 @@ def build(section: PersonalBestsSection, live_data: dict, guild: discord.Guild) 
             variant = pb.get("variant") or ""
             time_sec = pb.get("time_seconds")
             ts = _ts(pb.get("timestamp"))
-            time_str = f" ({_fmt_time(int(float(time_sec)))})" if time_sec is not None else ""
+            time_str = (
+                f" ({_fmt_time(int(float(time_sec)))})" if time_sec is not None else ""
+            )
             full_activity = f"{activity} - {variant}" if variant else activity
             lines.append(f"🥇 `{player}` - {full_activity}{time_str}{ts}")
 

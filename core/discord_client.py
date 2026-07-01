@@ -15,6 +15,7 @@ from core.service_loader import load_all_services
 
 if TYPE_CHECKING:
     from features.action_log.service import ActionLogService
+    from features.admin.service import AdminService
     from features.broadcast.service import BroadcastService
     from features.competition_schedule.service import CompScheduleService
     from features.tickets.dm_service import DMTicketService
@@ -50,6 +51,7 @@ class DiscordClient(discord.Client):
         self.party_service: PartyService | None = None
         self.info_panel_service: InfoPanelService | None = None
         self.competition_schedule_service: CompScheduleService | None = None
+        self.admin_service: AdminService | None = None
 
     async def _resolve_guild(self) -> None:
         """Look up the configured guild and bind it to the command handler."""
@@ -93,6 +95,7 @@ class DiscordClient(discord.Client):
             self.party_service,
             self.info_panel_service,
             self.competition_schedule_service,
+            self.admin_service,
         ) = services
         self.service_handler.register(*services)
         self._services_loaded = True

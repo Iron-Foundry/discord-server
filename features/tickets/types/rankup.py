@@ -68,7 +68,9 @@ class RankupTicket(TicketTypeConfig):
 
     @property
     def description(self) -> str:
-        return self._db_overrides.get("description", "Apply for a rank based on your OSRS achievements.")
+        return self._db_overrides.get(
+            "description", "Apply for a rank based on your OSRS achievements."
+        )
 
     @property
     def emoji(self) -> str:
@@ -137,7 +139,11 @@ class RankupTicket(TicketTypeConfig):
                 )
             if fn := rank_images.get("rank_upgrades"):
                 children.append(discord.ui.Separator())
-                children.append(discord.ui.TextDisplay(content="### Valid Item & Requirement Upgrades:"))
+                children.append(
+                    discord.ui.TextDisplay(
+                        content="### Valid Item & Requirement Upgrades:"
+                    )
+                )
                 children.append(
                     discord.ui.MediaGallery(
                         discord.MediaGalleryItem(

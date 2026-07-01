@@ -11,7 +11,11 @@ import httpx
 from loguru import logger
 
 from core.service_base import Service
-from features.info_panel.models import InfoPanelConfig, InfoPanelState, PanelMessageState
+from features.info_panel.models import (
+    InfoPanelConfig,
+    InfoPanelState,
+    PanelMessageState,
+)
 from features.info_panel.pg_repository import PgInfoPanelRepository
 from features.info_panel.views.builder import build_views
 
@@ -150,7 +154,9 @@ class InfoPanelService(Service):
                 self._messages = []
                 return
         self._messages = recovered
-        logger.info("InfoPanel: recovered {} message(s) in #{}", len(recovered), channel.name)
+        logger.info(
+            "InfoPanel: recovered {} message(s) in #{}", len(recovered), channel.name
+        )
         await self.refresh_panel()
 
     # ── Data fetching ─────────────────────────────────────────────────────
@@ -188,7 +194,9 @@ class InfoPanelService(Service):
         if not requests:
             return {}
 
-        async def _get(client: httpx.AsyncClient, key: str, url: str) -> tuple[str, object]:
+        async def _get(
+            client: httpx.AsyncClient, key: str, url: str
+        ) -> tuple[str, object]:
             try:
                 r = await client.get(f"{api_url}{url}")
                 r.raise_for_status()
