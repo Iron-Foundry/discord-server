@@ -214,3 +214,71 @@ class RolePanel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False
     )
+
+
+class BallotTokenAccount(Base):
+    """Mirrors api-backend ballot_token_accounts - the spendable balance."""
+
+    __tablename__ = "ballot_token_accounts"
+
+    discord_user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.discord_user_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    balance: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )
+
+
+class BallotTokenTransaction(Base):
+    """Mirrors api-backend ballot_token_transactions - append-only ledger."""
+
+    __tablename__ = "ballot_token_transactions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    discord_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    run_id: Mapped[int | None] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )
+
+
+class BallotPollVote(Base):
+    """Mirrors api-backend ballot_poll_votes - one vote per user per run."""
+
+    __tablename__ = "ballot_poll_votes"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    run_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    discord_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    metric: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )
+
+
+class CompetitionSchedule(Base):
+    """Read-only subset of api-backend competition_schedules."""
+
+    __tablename__ = "competition_schedules"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    poll_options: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+
+
+class ScheduledCompetitionRun(Base):
+    """Read-only subset of api-backend scheduled_competition_runs."""
+
+    __tablename__ = "scheduled_competition_runs"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    schedule_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    poll_options_override: Mapped[list | None] = mapped_column(JSONB)
+    poll_ends_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
