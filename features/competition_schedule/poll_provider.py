@@ -24,7 +24,7 @@ class PollProvider(Protocol):
         self,
         channel: discord.TextChannel,
         question: str,
-        options: list[PollOption],
+        options: list[dict],
         duration_hours: float,
     ) -> int:
         """Post a poll to the channel and return the Discord message ID."""
@@ -34,7 +34,7 @@ class PollProvider(Protocol):
         self,
         channel: discord.TextChannel,
         message_id: int,
-        options: list[PollOption],
+        options: list[dict],
     ) -> PollResult:
         """Fetch the current poll state and return the winning metric (or None if no winner)."""
         ...
@@ -47,7 +47,7 @@ class DiscordNativePollProvider:
         self,
         channel: discord.TextChannel,
         question: str,
-        options: list[PollOption],
+        options: list[dict],
         duration_hours: float,
     ) -> int:
         poll = discord.Poll(
@@ -65,7 +65,7 @@ class DiscordNativePollProvider:
         self,
         channel: discord.TextChannel,
         message_id: int,
-        options: list[PollOption],
+        options: list[dict],
     ) -> PollResult:
         try:
             msg = await channel.fetch_message(message_id)

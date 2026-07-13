@@ -248,11 +248,14 @@ async def load_admin_service(
 async def load_competition_schedule_service(
     guild: discord.Guild,
     client: "DiscordClient",
+    session_factory: async_sessionmaker[AsyncSession],
 ) -> "CompScheduleService":
     """Initialise the competition schedule service."""
     from features.competition_schedule.service import CompScheduleService
 
-    service = CompScheduleService(guild=guild, client=client)
+    service = CompScheduleService(
+        guild=guild, client=client, session_factory=session_factory
+    )
     await service.initialize()
     logger.info("Competition schedule service initialised")
     return service
@@ -317,7 +320,7 @@ async def load_all_services(
         load_user_key_service(guild, tree, session_factory, client),
         load_party_service(guild, tree, session_factory, client),
         load_info_panel_service(guild, tree, session_factory, client),
-        load_competition_schedule_service(guild, client),
+        load_competition_schedule_service(guild, client, session_factory),
         load_admin_service(guild, tree, session_factory),
     )
     ticket = cast("TicketService", _results[0])

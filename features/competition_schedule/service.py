@@ -8,9 +8,12 @@ import os
 
 import discord
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.service_base import Service
-from .poll_provider import DiscordNativePollProvider, PollOption, PollProvider
+from features.ballot_booth.provider import BallotBoothPollProvider
+from features.ballot_booth.vote_button import BallotVoteButton
+from .poll_provider import DiscordNativePollProvider, PollProvider
 from .views import build_results_embed
 
 _VALKEY_URI = os.getenv("VALKEY_URI", "redis://localhost:6379")
@@ -19,6 +22,7 @@ _CH_CREATE_POLL = "foundry:comp_schedule:create_poll"
 _CH_POLL_POSTED = "foundry:comp_schedule:poll_posted"
 _CH_POLL_RESULT = "foundry:comp_schedule:poll_result"
 _CH_CLOSE_POLL = "foundry:comp_schedule:close_poll"
+_CH_UPDATE_POLL = "foundry:comp_schedule:update_poll"
 _CH_ANNOUNCE = "foundry:comp_schedule:announce_results"
 
 
@@ -29,11 +33,15 @@ class CompScheduleService(Service):
         self,
         guild: discord.Guild,
         client: discord.Client,
+        session_factory: async_sessionmaker[AsyncSession],
         poll_provider: PollProvider | None = None,
     ) -> None:
         self._guild = guild
         self._client = client
-        self._poll_provider: PollProvider = poll_provider or DiscordNativePollProvider()
+        self._native_provider: PollProvider = (
+            poll_provider or DiscordNativePollProvider()
+        )
+        self._ballot_provider = BallotBoothPollProvider(session_factory)
         self._poll_task: asyncio.Task | None = None
         self._close_task: asyncio.Task | None = None
         self._announce_task: asyncio.Task | None = None
@@ -42,6 +50,7 @@ class CompScheduleService(Service):
         pass
 
     async def post_ready(self) -> None:
+        self._client.add_dynamic_items(BallotVoteButton)
         self._poll_task = asyncio.create_task(
             self._create_poll_subscriber(), name="comp-schedule-poll-sub"
         )
@@ -102,15 +111,23 @@ class CompScheduleService(Service):
             )
             try:
                 async with client.pubsub() as ps:
-                    await ps.subscribe(_CH_CLOSE_POLL)
+                    await ps.subscribe(_CH_CLOSE_POLL, _CH_UPDATE_POLL)
                     logger.info("CompScheduleService: subscribed to {}", _CH_CLOSE_POLL)
                     async for raw in ps.listen():
                         if raw["type"] != "message":
                             continue
                         try:
                             data = json.loads(raw["data"])
+                            channel = raw["channel"]
+                            if isinstance(channel, bytes):
+                                channel = channel.decode()
+                            handler = (
+                                self._handle_update_poll
+                                if channel == _CH_UPDATE_POLL
+                                else self._handle_close_poll
+                            )
                             asyncio.create_task(
-                                self._handle_close_poll(data),
+                                handler(data),
                                 name=f"comp-close-{data.get('run_id')}",
                             )
                         except Exception as exc:
@@ -200,25 +217,34 @@ class CompScheduleService(Service):
     async def _handle_create_poll(self, data: dict) -> None:
         run_id = data.get("run_id")
         channel_id = data.get("channel_id")
-        options: list[PollOption] = data.get("options", [])
+        options: list[dict] = data.get("options", [])
         duration_hours: float = data.get("poll_duration_hours", 24.0)
         title: str = data.get("title", "What should we compete on?")
+        poll_version: int = data.get("poll_version", 1)
+        vote_cost: int = data.get("vote_cost", 1)
+        poll_ends_unix = data.get("poll_ends_at_unix")
 
-        if not channel_id or not options:
+        if run_id is None or not channel_id or not options:
             logger.warning(
                 "CompScheduleService: invalid create_poll payload for run {}", run_id
             )
             return
+        run_id = int(run_id)
 
         channel = await self._resolve_text_channel(channel_id)
         if channel is None:
             return
 
         try:
-            question = f"Vote for the next {title} metric!"
-            msg_id = await self._poll_provider.post_poll(
-                channel, question, options, duration_hours
-            )
+            if poll_version == 2:
+                msg_id = await self._ballot_provider.post_poll(
+                    channel, title, options, run_id, vote_cost, poll_ends_unix
+                )
+            else:
+                question = f"Vote for the next {title} metric!"
+                msg_id = await self._native_provider.post_poll(
+                    channel, question, options, duration_hours
+                )
 
             from valkey.asyncio import Valkey as ValkeyClient
 
@@ -252,22 +278,30 @@ class CompScheduleService(Service):
         run_id = data.get("run_id")
         channel_id = data.get("channel_id")
         message_id = data.get("message_id")
-        options: list[PollOption] = data.get("options", [])
+        options: list[dict] = data.get("options", [])
+        poll_version: int = data.get("poll_version", 1)
+        title: str = data.get("title", "Competition")
 
-        if not channel_id or not message_id:
+        if run_id is None or not channel_id or not message_id:
             logger.warning(
                 "CompScheduleService: invalid close_poll payload for run {}", run_id
             )
             return
+        run_id = int(run_id)
 
         channel = await self._resolve_text_channel(channel_id)
         if channel is None:
             return
 
         try:
-            result = await self._poll_provider.collect_result(
-                channel, int(message_id), options
-            )
+            if poll_version == 2:
+                result = await self._ballot_provider.collect_result(
+                    channel, int(message_id), run_id, options, title
+                )
+            else:
+                result = await self._native_provider.collect_result(
+                    channel, int(message_id), options
+                )
 
             from valkey.asyncio import Valkey as ValkeyClient
 
@@ -301,6 +335,30 @@ class CompScheduleService(Service):
                 run_id,
                 exc,
             )
+
+    async def _handle_update_poll(self, data: dict) -> None:
+        run_id = data.get("run_id")
+        channel_id = data.get("channel_id")
+        message_id = data.get("message_id")
+        options: list[dict] = data.get("options", [])
+
+        if run_id is None or not channel_id or not message_id:
+            return
+
+        channel = await self._resolve_text_channel(channel_id)
+        if channel is None:
+            return
+
+        await self._ballot_provider.update_poll(
+            channel,
+            int(message_id),
+            int(run_id),
+            data.get("title", "Competition"),
+            options,
+            data.get("vote_cost", 1),
+            data.get("poll_ends_at_unix"),
+        )
+        logger.info("CompScheduleService: updated ballot poll for run {}", run_id)
 
     async def _handle_announce(self, data: dict) -> None:
         results_channel_id = data.get("results_channel_id")
