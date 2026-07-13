@@ -177,6 +177,25 @@ class TicketService(Service):
 
         logger.info(f"TicketService: recovered {recovered} open tickets")
 
+        from features.tickets.views.reopen import ReopenLayout as _ReopenLayout
+
+        closed_records = await self.repo.get_recent_closed_tickets(
+            self.guild.id, limit=50
+        )
+        for closed_record in closed_records:
+            self._client.add_view(
+                _ReopenLayout(
+                    service=self,
+                    ticket_id=closed_record.ticket_id,
+                    closer=None,
+                    reason=None,
+                )
+            )
+        logger.info(
+            "TicketService: registered reopen views for {} recently closed tickets",
+            len(closed_records),
+        )
+
     # -------------------------------------------------------------------------
     # Panel
     # -------------------------------------------------------------------------

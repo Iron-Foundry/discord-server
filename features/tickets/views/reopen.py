@@ -72,7 +72,7 @@ class _ReopenButton(discord.ui.Button):
 def build_reopen_layout(
     service: TicketService,
     ticket_id: int,
-    closer: discord.Member,
+    closer: discord.Member | None,
     reason: str | None,
     *,
     disabled: bool = False,
@@ -94,15 +94,14 @@ class ReopenLayout(discord.ui.LayoutView):
         *,
         service: TicketService,
         ticket_id: int,
-        closer: discord.Member,
+        closer: discord.Member | None,
         reason: str | None,
         disabled: bool = False,
     ) -> None:
         super().__init__(timeout=None)
-        lines = [
-            f"## 🔒 Ticket #{ticket_id:04d} Closed",
-            f"Closed by {closer.mention}.",
-        ]
+        lines: list[str] = [f"## 🔒 Ticket #{ticket_id:04d} Closed"]
+        if closer is not None:
+            lines.append(f"Closed by {closer.mention}.")
         if reason:
             lines.append(f"**Reason:** {reason}")
 
