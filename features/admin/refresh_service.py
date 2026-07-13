@@ -11,6 +11,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.db.models import Config, User
+from features.admin._ranks import highest_gem_rank, is_gem_rank
 
 
 @dataclass
@@ -87,14 +88,12 @@ async def refresh_all_roles(
 
         role_ids = _member_role_ids(member, guild, co_owner_role_id)
 
-        clan_rank: str | None = None
-        if rsn:
-            clan_rank = wom_ranks.get(rsn.lower())
-        if clan_rank is None:
-            for rid in role_ids:
-                if rid in role_to_rank:
-                    clan_rank = role_to_rank[rid]
-                    break
+        wom_rank = wom_ranks.get(rsn.lower()) if rsn else None
+        clan_rank: str | None = (
+            wom_rank
+            if is_gem_rank(wom_rank)
+            else highest_gem_rank(role_ids, role_to_rank)
+        )
 
         if dry_run:
             logger.debug(

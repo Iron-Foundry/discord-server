@@ -14,6 +14,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.db.models import Config, User, UserAccount
+from features.admin._ranks import highest_gem_rank, is_gem_rank
 
 _WOM_BASE = "https://api.wiseoldman.net/v2"
 _WOM_API_KEY = os.getenv("WOM_API_KEY")
@@ -54,25 +55,31 @@ async def _fetch_wom_history(rsn: str) -> list[str]:
     return []
 
 
-async def _get_rank_role_id(session: AsyncSession, clan_rank: str) -> int | None:
+async def _load_config_maps(
+    session: AsyncSession,
+) -> tuple[dict[str, str], dict[str, str]]:
     result = await session.execute(
         select(Config.value).where(
             Config.guild_id == 0, Config.key == "clan_rank_mappings"
         )
     )
     cfg = result.scalar_one_or_none() or {}
+    role_to_rank: dict[str, str] = {}
+    rank_to_role: dict[str, str] = {}
     for m in cfg.get("mappings", []):
-        if m.get("clan_rank") == clan_rank:
-            raw = m.get("discord_role_id") or m.get("discord_role")
-            return int(raw) if raw else None
-    return None
+        role_id = m.get("discord_role_id") or m.get("discord_role")
+        clan_rank = m.get("clan_rank")
+        if role_id and clan_rank:
+            role_to_rank[str(role_id)] = clan_rank
+            rank_to_role[clan_rank] = str(role_id)
+    return role_to_rank, rank_to_role
 
 
 async def _write_and_backfill(
     session: AsyncSession,
     member: discord.Member,
     rsn: str,
-    clan_rank: str,
+    clan_rank: str | None,
 ) -> None:
     now = datetime.now(timezone.utc)
     await session.execute(
@@ -154,15 +161,15 @@ async def auto_link_members(
     """
     result = LinkResult()
     by_display, by_nick = _build_member_lookups(guild)
-    role_cache: dict[str, int | None] = {}
 
     async with session_factory() as session:
         wom_rows = await session.execute(
             text("SELECT rsn, clan_rank FROM wom_clan_ranks")
         )
         wom_members = [(row[0], row[1]) for row in wom_rows]
+        role_to_rank, rank_to_role = await _load_config_maps(session)
 
-        for rsn, clan_rank in wom_members:
+        for rsn, wom_rank in wom_members:
             rsn_taken = await session.execute(
                 select(UserAccount.id).where(func.lower(UserAccount.rsn) == rsn.lower())
             )
@@ -184,7 +191,14 @@ async def auto_link_members(
                 result.skipped.append(f"{rsn}: {member} already has linked accounts")
                 continue
 
-            label = f"{rsn} -> {member} [{clan_rank}]"
+            member_role_ids = [str(r.id) for r in member.roles if r.name != "@everyone"]
+            clan_rank: str | None = (
+                wom_rank
+                if is_gem_rank(wom_rank)
+                else highest_gem_rank(member_role_ids, role_to_rank)
+            )
+
+            label = f"{rsn} -> {member} [{clan_rank or wom_rank}]"
             if dry_run:
                 result.linked.append(label)
                 continue
@@ -192,14 +206,12 @@ async def auto_link_members(
             try:
                 await _write_and_backfill(session, member, rsn, clan_rank)
 
-                if clan_rank not in role_cache:
-                    role_cache[clan_rank] = await _get_rank_role_id(session, clan_rank)
-                role_id = role_cache[clan_rank]
+                role_id_str = rank_to_role.get(clan_rank) if clan_rank else None
 
                 await session.commit()
 
-                if role_id is not None:
-                    role = guild.get_role(role_id)
+                if role_id_str is not None:
+                    role = guild.get_role(int(role_id_str))
                     if role is not None:
                         await member.add_roles(role, reason="auto-link: WOM name match")
 
