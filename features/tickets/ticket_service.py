@@ -600,6 +600,21 @@ class TicketService(Service):
             overwrites = ticket_type.get_channel_permissions(
                 self.guild, creator_member or reopener
             )
+            for added_id in record.added_user_ids:
+                added_member = self.guild.get_member(added_id)
+                if added_member:
+                    overwrites[added_member] = discord.PermissionOverwrite(
+                        view_channel=True,
+                        send_messages=True,
+                        attach_files=True,
+                        embed_links=True,
+                        read_message_history=True,
+                    )
+                else:
+                    logger.warning(
+                        f"Ticket #{ticket_id}: added user {added_id} no longer "
+                        "in guild, skipping reinvite"
+                    )
             new_channel = await category.create_text_channel(
                 name=channel_name, overwrites=overwrites
             )
@@ -608,26 +623,33 @@ class TicketService(Service):
                 f"created under '{category.name}'"
             )
 
-            # Post prior transcript file (skipped for sensitive tickets)
+            # Post prior transcript file (skipped for sensitive tickets).
+            # Isolated so a transcript failure never aborts the rest of the
+            # reopen (record update, active-ticket registration, timeout).
             if ticket_type.sensitive:
                 logger.info(
                     f"Ticket #{ticket_id}: sensitive - skipping prior transcript post"
                 )
             else:
-                prior_transcript = await self.repo.get_transcript(ticket_id)
-                if prior_transcript:
-                    from features.tickets.handlers.transcript_file import (
-                        build_transcript_file,
-                    )
+                try:
+                    prior_transcript = await self.repo.get_transcript(ticket_id)
+                    if prior_transcript:
+                        from features.tickets.handlers.transcript_file import (
+                            build_transcript_file,
+                        )
 
-                    file = build_transcript_file(prior_transcript)
-                    await new_channel.send(
-                        content="**Prior conversation transcript:**", file=file
-                    )
-                    logger.debug(f"Ticket #{ticket_id}: prior transcript posted")
-                else:
+                        file = build_transcript_file(prior_transcript)
+                        await new_channel.send(
+                            content="**Prior conversation transcript:**", file=file
+                        )
+                        logger.debug(f"Ticket #{ticket_id}: prior transcript posted")
+                    else:
+                        logger.warning(
+                            f"Ticket #{ticket_id}: no prior transcript found in DB"
+                        )
+                except Exception as e:
                     logger.warning(
-                        f"Ticket #{ticket_id}: no prior transcript found in DB"
+                        f"Ticket #{ticket_id}: failed to post prior transcript: {e}"
                     )
 
             # Update the record in place
@@ -705,6 +727,11 @@ class TicketService(Service):
                     target_id=member.id,
                 )
             )
+            if member.id not in ticket.record.added_user_ids:
+                ticket.record.added_user_ids.append(member.id)
+                await self.repo.update_ticket(
+                    ticket_id, added_user_ids=ticket.record.added_user_ids
+                )
             return True
         except discord.HTTPException as e:
             logger.error(f"add_user failed: {e}")
@@ -724,6 +751,11 @@ class TicketService(Service):
                     target_id=member.id,
                 )
             )
+            if member.id in ticket.record.added_user_ids:
+                ticket.record.added_user_ids.remove(member.id)
+                await self.repo.update_ticket(
+                    ticket_id, added_user_ids=ticket.record.added_user_ids
+                )
             return True
         except discord.HTTPException as e:
             logger.error(f"remove_user failed: {e}")

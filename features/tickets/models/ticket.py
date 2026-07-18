@@ -83,6 +83,9 @@ class TicketRecord(BaseModel):
     first_staff_response_at: datetime | None = None
     participants: list[int] = Field(default_factory=list)  # staff who sent ≥1 message
     assigned_staff: list[int] = Field(default_factory=list)
+    added_user_ids: list[int] = Field(
+        default_factory=list
+    )  # manually invited via adduser
     reopen_history: list[ReopenEvent] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)  # type-specific fields
 

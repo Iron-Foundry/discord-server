@@ -111,6 +111,9 @@ class Ticket(Base):
     participants: Mapped[list] = mapped_column(
         ARRAY(BigInteger), nullable=False, server_default="{}"
     )
+    added_user_ids: Mapped[list] = mapped_column(
+        ARRAY(BigInteger), nullable=False, server_default="{}"
+    )
     closed_by_id: Mapped[int | None] = mapped_column(BigInteger)
     first_staff_response_at: Mapped[datetime | None] = mapped_column(
         TIMESTAMP(timezone=True)

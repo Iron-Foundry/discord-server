@@ -684,6 +684,7 @@ def _record_to_orm_values(record: TicketRecord) -> dict:
         "creator_name": record.creator.name,
         "assigned_staff": record.assigned_staff,
         "participants": record.participants,
+        "added_user_ids": record.added_user_ids,
         "closed_by_id": record.closed_by_id,
         "first_staff_response_at": record.first_staff_response_at,
         "panel_message_id": record.panel_message_id,
@@ -732,6 +733,7 @@ def _orm_to_record(row: OrmTicket) -> TicketRecord:
         first_staff_response_at=row.first_staff_response_at,
         participants=list(row.participants or []),
         assigned_staff=list(row.assigned_staff or []),
+        added_user_ids=list(row.added_user_ids or []),
         reopen_history=reopen_history,
         metadata=meta,
     )
