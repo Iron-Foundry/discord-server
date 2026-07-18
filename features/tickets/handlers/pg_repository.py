@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 from datetime import datetime
 from typing import Any
 
@@ -18,6 +19,7 @@ from features.tickets.models.transcript import Transcript
 
 _PANEL_KEY = "panel"
 _TICKET_KEY = "ticket"
+_JSONB_COLUMNS = {"reopen_history", "metadata"}
 
 
 class PgTicketRepository:
@@ -62,16 +64,30 @@ class PgTicketRepository:
             await session.commit()
 
     async def update_ticket(self, ticket_id: int, **fields: Any) -> None:
-        """Partially update a ticket. Pass column=value keyword args."""
+        """Partially update a ticket. Pass column=value keyword args.
+
+        This runs as raw SQL (not the ORM), so it has no column-type info -
+        JSONB columns must be pre-serialized and cast explicitly, or asyncpg
+        rejects the raw Python list/dict with a DataError.
+        """
         if not fields:
             return
+        params: dict[str, Any] = {"ticket_id": ticket_id}
+        assignments: list[str] = []
+        for key, value in fields.items():
+            if key in _JSONB_COLUMNS:
+                params[key] = json.dumps(value)
+                assignments.append(f"{key} = :{key}::jsonb")
+            else:
+                params[key] = value
+                assignments.append(f"{key} = :{key}")
         async with self._factory() as session:
             await session.execute(
                 text(
-                    f"UPDATE tickets SET {', '.join(f'{k} = :{k}' for k in fields)}"
+                    f"UPDATE tickets SET {', '.join(assignments)}"
                     f" WHERE ticket_id = :ticket_id"
                 ),
-                {**fields, "ticket_id": ticket_id},
+                params,
             )
             await session.commit()
 
