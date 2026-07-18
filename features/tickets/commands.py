@@ -53,8 +53,18 @@ def register_help(registry: HelpRegistry) -> None:
                 ),
                 HelpEntry("/ticket add <user>", "Add a user to this ticket", "Staff"),
                 HelpEntry(
+                    "/ticket addrole <role>",
+                    "Add all members of a role to this ticket",
+                    "Staff",
+                ),
+                HelpEntry(
                     "/ticket remove <user>",
                     "Remove a user from this ticket",
+                    "Staff",
+                ),
+                HelpEntry(
+                    "/ticket removerole <role>",
+                    "Remove all members of a role from this ticket",
                     "Staff",
                 ),
                 HelpEntry(
@@ -400,6 +410,37 @@ class TicketGroup(
             )
 
     # ------------------------------------------------------------------
+    # /ticket addrole <role>
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="addrole", description="Add all members of a role to this ticket"
+    )
+    @app_commands.describe(role="The role whose members to add")
+    @is_staff()
+    async def add_role(
+        self, interaction: discord.Interaction, role: discord.Role
+    ) -> None:
+        if interaction.channel_id is None:
+            await interaction.response.send_message(
+                "Cannot determine channel.", ephemeral=True
+            )
+            return
+        ticket = self._service.get_ticket_by_channel(interaction.channel_id)
+        if not ticket:
+            await interaction.response.send_message(
+                "This command can only be used inside an active ticket channel.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.defer(thinking=True)
+        added, failed = await self._service.add_role(ticket.ticket_id, role)
+        suffix = f" ({failed} failed)" if failed else ""
+        await interaction.followup.send(
+            f"Added {added} member(s) of {role.mention} to the ticket{suffix}."
+        )
+
+    # ------------------------------------------------------------------
     # /ticket remove <user>
     # ------------------------------------------------------------------
 
@@ -430,6 +471,37 @@ class TicketGroup(
             await interaction.response.send_message(
                 "Failed to remove user.", ephemeral=True
             )
+
+    # ------------------------------------------------------------------
+    # /ticket removerole <role>
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="removerole", description="Remove all members of a role from this ticket"
+    )
+    @app_commands.describe(role="The role whose members to remove")
+    @is_staff()
+    async def remove_role(
+        self, interaction: discord.Interaction, role: discord.Role
+    ) -> None:
+        if interaction.channel_id is None:
+            await interaction.response.send_message(
+                "Cannot determine channel.", ephemeral=True
+            )
+            return
+        ticket = self._service.get_ticket_by_channel(interaction.channel_id)
+        if not ticket:
+            await interaction.response.send_message(
+                "This command can only be used inside an active ticket channel.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.defer(thinking=True)
+        removed, failed = await self._service.remove_role(ticket.ticket_id, role)
+        suffix = f" ({failed} failed)" if failed else ""
+        await interaction.followup.send(
+            f"Removed {removed} member(s) of {role.mention} from the ticket{suffix}."
+        )
 
     # ------------------------------------------------------------------
     # /ticket freeze / unfreeze

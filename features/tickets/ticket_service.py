@@ -737,6 +737,22 @@ class TicketService(Service):
             logger.error(f"add_user failed: {e}")
             return False
 
+    async def add_role(self, ticket_id: int, role: discord.Role) -> tuple[int, int]:
+        """Add every current human member of a role to the ticket.
+
+        Returns (added, failed) counts.
+        """
+        added = 0
+        failed = 0
+        for member in role.members:
+            if member.bot:
+                continue
+            if await self.add_user(ticket_id, member):
+                added += 1
+            else:
+                failed += 1
+        return added, failed
+
     async def remove_user(self, ticket_id: int, member: discord.Member) -> bool:
         ticket = self._get_by_ticket_id(ticket_id)
         if not ticket:
@@ -760,6 +776,22 @@ class TicketService(Service):
         except discord.HTTPException as e:
             logger.error(f"remove_user failed: {e}")
             return False
+
+    async def remove_role(self, ticket_id: int, role: discord.Role) -> tuple[int, int]:
+        """Remove every current human member of a role from the ticket.
+
+        Returns (removed, failed) counts.
+        """
+        removed = 0
+        failed = 0
+        for member in role.members:
+            if member.bot:
+                continue
+            if await self.remove_user(ticket_id, member):
+                removed += 1
+            else:
+                failed += 1
+        return removed, failed
 
     async def freeze_timeout(self, ticket_id: int) -> bool:
         ticket = self._get_by_ticket_id(ticket_id)
