@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 
@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from features.tickets.ticket_service import TicketService
 
 
-class _AddUserSelect(discord.ui.UserSelect):
+class _AddUserSelect(discord.ui.UserSelect[Any]):
     def __init__(self, service: TicketService, channel_id: int) -> None:
         super().__init__(
             placeholder="Select a user to add...", min_values=1, max_values=1
@@ -42,7 +42,7 @@ class _AddUserSelect(discord.ui.UserSelect):
             )
 
 
-class _RemoveUserSelect(discord.ui.UserSelect):
+class _RemoveUserSelect(discord.ui.UserSelect[Any]):
     def __init__(self, service: TicketService, channel_id: int) -> None:
         super().__init__(
             placeholder="Select a user to remove...", min_values=1, max_values=1
@@ -74,7 +74,7 @@ class _RemoveUserSelect(discord.ui.UserSelect):
             )
 
 
-class AddUserButton(discord.ui.Button):
+class AddUserButton(discord.ui.Button[Any]):
     def __init__(self, service: TicketService) -> None:
         super().__init__(
             label="Add User",
@@ -107,7 +107,7 @@ class AddUserButton(discord.ui.Button):
         )
 
 
-class RemoveUserButton(discord.ui.Button):
+class RemoveUserButton(discord.ui.Button[Any]):
     def __init__(self, service: TicketService) -> None:
         super().__init__(
             label="Remove User",

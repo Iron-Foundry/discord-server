@@ -69,7 +69,7 @@ class StatsView(discord.ui.LayoutView):
                 )
             )
 
-        children: list[discord.ui.Item] = [
+        children: list[discord.ui.Item[Any]] = [
             discord.ui.TextDisplay(content=_stats_text(stats, display_name, period)),
         ]
         if media_items:

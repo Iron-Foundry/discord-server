@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from features.ballot_booth.pg_repository import PgBallotRepository
 
 _DEBOUNCE_SECONDS = 3.0
-_pending: dict[int, asyncio.Task] = {}
+_pending: dict[int, asyncio.Task[None]] = {}
 
 
 async def _do_refresh(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 import discord
 from loguru import logger
@@ -46,7 +47,7 @@ class PgUserKeyRepository:
 
     async def save(self, user_key: UserKey) -> None:
         """Upsert a user key, replacing any existing key for that user."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         async with self._factory() as session:
             await session.execute(
                 update(User)
@@ -64,7 +65,7 @@ class PgUserKeyRepository:
 
     async def upsert_user_profile(self, user_key: UserKey) -> None:
         """Create or refresh the unified user profile for this user key."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = (
             pg_insert(User)
             .values(
@@ -90,7 +91,7 @@ class PgUserKeyRepository:
             await session.execute(stmt)
             await session.commit()
 
-    async def get_user_profile(self, discord_user_id: int) -> dict | None:
+    async def get_user_profile(self, discord_user_id: int) -> dict[str, Any] | None:
         """Return the user profile as a dict, or None if not found."""
         async with self._factory() as session:
             result = await session.execute(
@@ -108,7 +109,7 @@ class PgUserKeyRepository:
 
         Demotes any existing primary to alt, then upserts the new RSN as primary.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = (
             pg_insert(User)
             .values(
@@ -133,7 +134,7 @@ class PgUserKeyRepository:
         self, session: AsyncSession, discord_user_id: int, rsn: str
     ) -> None:
         """Demote current primary to alt and set rsn as new primary in user_accounts."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await session.execute(
             update(UserAccount)
@@ -169,7 +170,7 @@ class PgUserKeyRepository:
                 )
             )
 
-    async def get_user_accounts(self, discord_user_id: int) -> list[dict]:
+    async def get_user_accounts(self, discord_user_id: int) -> list[dict[str, Any]]:
         """Return all RSN accounts linked to a user, primary first."""
         async with self._factory() as session:
             result = await session.execute(
@@ -213,7 +214,7 @@ class PgUserKeyRepository:
                     " Remove an alt at ironfoundry.cc/members/settings first."
                 )
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             # Check if user has any accounts (to determine is_primary)
             count_result = await session.execute(
@@ -258,7 +259,7 @@ class PgUserKeyRepository:
             if row.is_primary:
                 return None
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             await session.execute(
                 update(UserAccount)
                 .where(
@@ -306,7 +307,7 @@ class PgUserKeyRepository:
                     " Set a different primary first."
                 )
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if total == 1:
                 await session.execute(
                     update(User)
@@ -320,7 +321,7 @@ class PgUserKeyRepository:
 
     async def upsert_member(self, member: discord.Member) -> None:
         """Insert a bare user profile for a guild member, preserving existing RSN."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         joined_at = member.joined_at or now
         role_names = [r.name for r in member.roles if r.name != "@everyone"]
         async with self._factory() as session:
@@ -362,7 +363,7 @@ class PgUserKeyRepository:
 
     async def set_stats_opt_out(self, discord_user_id: int, opt_out: bool) -> None:
         """Set or clear the stats opt-out flag on a user profile."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = (
             pg_insert(User)
             .values(

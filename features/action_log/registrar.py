@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 if TYPE_CHECKING:
-    from features.action_log.service import ActionLogService
     from core.discord_client import DiscordClient
+    from features.action_log.service import ActionLogService
 
 
 class EventRegistrar:

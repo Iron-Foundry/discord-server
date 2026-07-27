@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from typing import Any
+
 import discord
 
 from core.common.ticket_types import TicketTypeId
-from features.tickets.models.ticket import TicketTypeConfig, TicketTeam, TicketRecord
+from features.tickets.models.ticket import TicketRecord, TicketTeam, TicketTypeConfig
 from features.tickets.views._layout_helpers import header_items
 
 
@@ -18,7 +20,7 @@ class SensitiveTicket(TicketTypeConfig):
             TicketTeam(name="Senior Staff", role_id=senior_staff_role_id),
             TicketTeam(name="Owners", role_id=owner_role_id),
         ]
-        self._db_overrides: dict = {}
+        self._db_overrides: dict[str, Any] = {}
 
     @property
     def identifier(self) -> str:

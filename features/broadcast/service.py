@@ -5,9 +5,9 @@ from dataclasses import dataclass
 import discord
 from loguru import logger
 
+from core.service_base import Service
 from features.broadcast.models import BroadcastConfig
 from features.broadcast.pg_repository import PgBroadcastRepository
-from core.service_base import Service
 
 
 @dataclass

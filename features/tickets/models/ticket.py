@@ -1,12 +1,13 @@
 import asyncio
-from collections.abc import Callable, Coroutine
-from enum import Enum
-from pydantic import BaseModel, Field
-import discord
 from abc import ABC, abstractmethod
-from datetime import datetime, UTC
+from collections.abc import Callable, Coroutine
+from datetime import UTC, datetime
+from enum import Enum
 from typing import Any
+
+import discord
 from loguru import logger
+from pydantic import BaseModel, Field
 
 from .transcript import Transcript, TranscriptEntry
 
@@ -44,7 +45,7 @@ class MemberSnapshot(BaseModel):
     )  # [{"id": int, "name": str}]
 
     @classmethod
-    def from_member(cls, member: discord.Member) -> "MemberSnapshot":
+    def from_member(cls, member: discord.Member) -> MemberSnapshot:
         return cls(
             id=member.id,
             name=member.name,
@@ -96,12 +97,12 @@ class TicketTypeConfig(ABC):
     enabled: bool = True
     default_frozen: bool = False
 
-    def apply_overrides(self, overrides: dict) -> None:
+    def apply_overrides(self, overrides: dict[str, Any]) -> None:
         """Apply DB-sourced config overrides. Called by post_ready after loading from DB.
 
         Subclasses must read from ``self._db_overrides`` in their property getters.
         """
-        self._db_overrides: dict = overrides
+        self._db_overrides: dict[str, Any] = overrides
         if "enabled" in overrides:
             self.enabled = bool(overrides["enabled"])
         if "max_open_per_user" in overrides:
@@ -269,7 +270,7 @@ class TicketTypeConfig(ABC):
         if mentions:
             await channel.send(" ".join(mentions))
 
-    async def on_closed(
+    async def on_closed(  # noqa: B027 - optional hook, not required
         self,
         record: TicketRecord,
         closer: discord.Member,
@@ -278,7 +279,9 @@ class TicketTypeConfig(ABC):
     ) -> None:
         """Called after the ticket is closed."""
 
-    async def on_reopened(self, record: TicketRecord, reopener: discord.Member) -> None:
+    async def on_reopened(  # noqa: B027 - optional hook, not required
+        self, record: TicketRecord, reopener: discord.Member
+    ) -> None:
         """Called after the ticket is reopened."""
 
     # --- Optional: initial modal ---
@@ -361,9 +364,9 @@ class Ticket:
             ticket_type=ticket_type.identifier,
             created_at=record.created_at,
         )
-        self._timeout_task: asyncio.Task | None = None
+        self._timeout_task: asyncio.Task[None] | None = None
         self.sticky_message_id: int | None = None
-        self._sticky_task: asyncio.Task | None = None
+        self._sticky_task: asyncio.Task[None] | None = None
 
     @classmethod
     def from_record(
@@ -372,7 +375,7 @@ class Ticket:
         channel: discord.TextChannel,
         ticket_type: TicketTypeConfig,
         creator: discord.Member | None = None,
-    ) -> "Ticket":
+    ) -> Ticket:
         """Reconstruct a Ticket from a persisted record (e.g. on restart or reopen)."""
         return cls(
             record=record, channel=channel, creator=creator, ticket_type=ticket_type

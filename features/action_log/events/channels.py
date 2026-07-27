@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import discord.abc
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import discord
+import discord.abc
 from loguru import logger
 
 from features.action_log.models import CATEGORY_COLORS, LogCategory

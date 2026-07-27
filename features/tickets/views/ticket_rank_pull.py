@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 import httpx
@@ -43,7 +43,7 @@ async def _set_primary_account(member: discord.Member, rsn: str) -> bool:
     Skips if the user already has a primary, or the RSN is held by another user.
     Returns True if the primary was set.
     """
-    from datetime import datetime, UTC
+    from datetime import UTC, datetime
 
     discord_user_id = member.id
 
@@ -134,13 +134,14 @@ async def _build_rank_score_chart(
     try:
         import asyncio
         import io
+
         import plotly.graph_objects as go
 
-        _BG = "#313338"
-        _GRID = "#383a40"
-        _TEXT = "#dbdee1"
-        _BOSS_COLOR = "#5865F2"
-        _SKILL_COLOR = "#57F287"
+        bg = "#313338"
+        grid = "#383a40"
+        text_color = "#dbdee1"
+        boss_color = "#5865F2"
+        skill_color = "#57F287"
 
         fig = go.Figure()
         fig.add_trace(
@@ -149,10 +150,10 @@ async def _build_rank_score_chart(
                 x=[boss_points],
                 y=[rsn],
                 orientation="h",
-                marker_color=_BOSS_COLOR,
+                marker_color=boss_color,
                 text=[f"{boss_points:,}"],
                 textposition="inside",
-                textfont={"color": _TEXT},
+                textfont={"color": text_color},
             )
         )
         fig.add_trace(
@@ -161,7 +162,7 @@ async def _build_rank_score_chart(
                 x=[skill_points],
                 y=[rsn],
                 orientation="h",
-                marker_color=_SKILL_COLOR,
+                marker_color=skill_color,
                 text=[f"{skill_points:,}"],
                 textposition="inside",
                 textfont={"color": "#1a1a2e"},
@@ -170,24 +171,29 @@ async def _build_rank_score_chart(
 
         fig.update_layout(
             barmode="stack",
-            paper_bgcolor=_BG,
-            plot_bgcolor=_BG,
-            font={"color": _TEXT, "family": "Arial, sans-serif"},
+            paper_bgcolor=bg,
+            plot_bgcolor=bg,
+            font={"color": text_color, "family": "Arial, sans-serif"},
             margin={"l": 80, "r": 120, "t": 60, "b": 40},
             xaxis={
-                "gridcolor": _GRID,
-                "zerolinecolor": _GRID,
-                "tickfont": {"color": _TEXT},
+                "gridcolor": grid,
+                "zerolinecolor": grid,
+                "tickfont": {"color": text_color},
             },
             yaxis={
-                "gridcolor": _GRID,
-                "zerolinecolor": _GRID,
-                "tickfont": {"color": _TEXT},
+                "gridcolor": grid,
+                "zerolinecolor": grid,
+                "tickfont": {"color": text_color},
             },
-            legend={"orientation": "h", "x": 0, "y": -0.15, "font": {"color": _TEXT}},
+            legend={
+                "orientation": "h",
+                "x": 0,
+                "y": -0.15,
+                "font": {"color": text_color},
+            },
             title={
                 "text": f"{rsn} - {rank} ({points:,} pts total)",
-                "font": {"color": _TEXT, "size": 16},
+                "font": {"color": text_color, "size": 16},
                 "x": 0.5,
             },
             annotations=[
@@ -199,7 +205,7 @@ async def _build_rank_score_chart(
                     "xanchor": "left",
                     "text": f"<b>{points:,}</b><br>Total",
                     "showarrow": False,
-                    "font": {"color": _TEXT, "size": 13},
+                    "font": {"color": text_color, "size": 13},
                 }
             ],
         )
@@ -221,7 +227,7 @@ class RsnModal(discord.ui.Modal, title="Pull Rank Score"):
         max_length=12,
     )
 
-    def __init__(self, service: "TicketService", ticket_id: int) -> None:
+    def __init__(self, service: TicketService, ticket_id: int) -> None:
         super().__init__()
         self._service = service
         self._ticket_id = ticket_id
@@ -289,18 +295,18 @@ class RsnModal(discord.ui.Modal, title="Pull Rank Score"):
         )
         embed.add_field(name="Rank", value=rank, inline=True)
         embed.add_field(name="Total Points", value=f"{points:,}", inline=True)
-        embed.add_field(name="​", value="​", inline=True)
+        embed.add_field(name="\u200b", value="\u200b", inline=True)
         if not stats_opt_out:
             embed.add_field(name="Boss Points", value=f"{boss_points:,}", inline=True)
             embed.add_field(name="Skill Points", value=f"{skill_points:,}", inline=True)
-            embed.add_field(name="​", value="​", inline=True)
+            embed.add_field(name="\u200b", value="\u200b", inline=True)
         else:
             embed.set_footer(text="Stats hidden (opt-out)")
 
         if chart_file:
             embed.set_image(url="attachment://rank_score.png")
 
-        send_kwargs: dict = {"embed": embed}
+        send_kwargs: dict[str, Any] = {"embed": embed}
         if chart_file:
             send_kwargs["file"] = chart_file
 
@@ -341,10 +347,10 @@ class RsnModal(discord.ui.Modal, title="Pull Rank Score"):
         await interaction.followup.send("Rank score posted.", ephemeral=True)
 
 
-class PullRankScoreButton(discord.ui.Button):
+class PullRankScoreButton(discord.ui.Button[Any]):
     """Staff button: opens RSN modal, posts rank score breakdown. One-shot per ticket."""
 
-    def __init__(self, service: "TicketService") -> None:
+    def __init__(self, service: TicketService) -> None:
         super().__init__(
             label="Pull Rank Score",
             style=discord.ButtonStyle.secondary,

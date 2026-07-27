@@ -27,7 +27,7 @@ def is_staff() -> Callable[[T], T]:
             return False
         return _has_role(interaction.user, role_id)
 
-    return app_commands.check(predicate)  # type: ignore[return-value]
+    return app_commands.check(predicate)
 
 
 def is_senior_staff() -> Callable[[T], T]:
@@ -44,7 +44,7 @@ def is_senior_staff() -> Callable[[T], T]:
             return False
         return _has_role(interaction.user, role_id)
 
-    return app_commands.check(predicate)  # type: ignore[return-value]
+    return app_commands.check(predicate)
 
 
 async def handle_check_failure(

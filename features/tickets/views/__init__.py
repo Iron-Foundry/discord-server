@@ -1,17 +1,17 @@
 from .panel import TicketPanelLayoutView, build_panel_layout
-from .ticket_close import CloseReasonModal, CloseButton
-from .ticket_type_change import ChangeTypeButton
-from .ticket_sticky import TicketStickyView, build_sticky_view
 from .reopen import ReopenLayout, build_reopen_layout
+from .ticket_close import CloseButton, CloseReasonModal
+from .ticket_sticky import TicketStickyView, build_sticky_view
+from .ticket_type_change import ChangeTypeButton
 
 __all__ = [
-    "TicketPanelLayoutView",
-    "build_panel_layout",
-    "CloseReasonModal",
-    "CloseButton",
     "ChangeTypeButton",
-    "TicketStickyView",
-    "build_sticky_view",
+    "CloseButton",
+    "CloseReasonModal",
     "ReopenLayout",
+    "TicketPanelLayoutView",
+    "TicketStickyView",
+    "build_panel_layout",
     "build_reopen_layout",
+    "build_sticky_view",
 ]

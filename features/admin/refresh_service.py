@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 import discord
 from loguru import logger
@@ -70,7 +71,7 @@ async def refresh_all_roles(
     the clan_rank_mappings config to infer from Discord roles.
     """
     result = RefreshResult()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     async with session_factory() as session:
         wom_ranks = await _load_wom_ranks(session)
@@ -107,7 +108,7 @@ async def refresh_all_roles(
 
         try:
             async with session_factory() as session:
-                values: dict = {"discord_roles": role_ids, "updated_at": now}
+                values: dict[str, Any] = {"discord_roles": role_ids, "updated_at": now}
                 if clan_rank is not None:
                     values["clan_rank"] = clan_rank
                 await session.execute(

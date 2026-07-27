@@ -7,8 +7,9 @@ defined in api-backend/alembic/versions/ exactly.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Integer, Text, ARRAY, TIMESTAMP
+from sqlalchemy import ARRAY, TIMESTAMP, BigInteger, Boolean, ForeignKey, Integer, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -28,10 +29,10 @@ class User(Base):
     )
     rsn: Mapped[str | None] = mapped_column(Text, unique=True)
     clan_rank: Mapped[str | None] = mapped_column(Text)
-    discord_roles: Mapped[list] = mapped_column(
+    discord_roles: Mapped[list[str]] = mapped_column(
         ARRAY(Text), nullable=False, server_default="{}"
     )
-    ticket_ids: Mapped[list] = mapped_column(
+    ticket_ids: Mapped[list[int]] = mapped_column(
         ARRAY(Integer), nullable=False, server_default="{}"
     )
     total_loot_value: Mapped[int] = mapped_column(
@@ -105,13 +106,13 @@ class Ticket(Base):
     channel_id: Mapped[int | None] = mapped_column(BigInteger)
     creator_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     creator_name: Mapped[str] = mapped_column(Text, nullable=False)
-    assigned_staff: Mapped[list] = mapped_column(
+    assigned_staff: Mapped[list[int]] = mapped_column(
         ARRAY(BigInteger), nullable=False, server_default="{}"
     )
-    participants: Mapped[list] = mapped_column(
+    participants: Mapped[list[int]] = mapped_column(
         ARRAY(BigInteger), nullable=False, server_default="{}"
     )
-    added_user_ids: Mapped[list] = mapped_column(
+    added_user_ids: Mapped[list[int]] = mapped_column(
         ARRAY(BigInteger), nullable=False, server_default="{}"
     )
     closed_by_id: Mapped[int | None] = mapped_column(BigInteger)
@@ -121,13 +122,13 @@ class Ticket(Base):
     panel_message_id: Mapped[int | None] = mapped_column(BigInteger)
     staff_note: Mapped[str | None] = mapped_column(Text)
     close_reason: Mapped[str | None] = mapped_column(Text)
-    reopen_history: Mapped[list] = mapped_column(
+    reopen_history: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, nullable=False, server_default="[]"
     )
     timeout_frozen: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
-    extra_metadata: Mapped[dict] = mapped_column(
+    extra_metadata: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default="{}", name="metadata"
     )
 
@@ -136,7 +137,9 @@ class Transcript(Base):
     __tablename__ = "transcripts"
 
     ticket_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    entries: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    entries: Mapped[list[Any] | dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
 
 
 class Config(Base):
@@ -144,7 +147,9 @@ class Config(Base):
 
     guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     key: Mapped[str] = mapped_column(Text, primary_key=True)
-    value: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    value: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
 
 
 class PartyDB(Base):
@@ -160,7 +165,7 @@ class PartyDB(Base):
     description: Mapped[str | None] = mapped_column(Text)
     vibe: Mapped[str] = mapped_column(Text, nullable=False, server_default="chill")
     max_size: Mapped[int] = mapped_column(Integer, nullable=False)
-    notification_category_ids: Mapped[list] = mapped_column(
+    notification_category_ids: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, server_default="[]"
     )
     hub_code: Mapped[str] = mapped_column(Text, nullable=False)
@@ -210,7 +215,9 @@ class RolePanel(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     max_selectable: Mapped[int | None] = mapped_column(Integer)
-    roles: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    roles: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False
     )
@@ -271,7 +278,7 @@ class CompetitionSchedule(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
-    poll_options: Mapped[list] = mapped_column(
+    poll_options: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, nullable=False, server_default="[]"
     )
 
@@ -283,5 +290,5 @@ class ScheduledCompetitionRun(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     schedule_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    poll_options_override: Mapped[list | None] = mapped_column(JSONB)
+    poll_options_override: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     poll_ends_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))

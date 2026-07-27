@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import os
-from typing import TYPE_CHECKING, cast
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, cast
 
 import discord
 from loguru import logger
@@ -14,8 +14,8 @@ from features.user_keys.pg_repository import PgUserKeyRepository
 if TYPE_CHECKING:
     from core.discord_client import DiscordClient
 
-_WORDLIST_PATH = os.path.join(os.path.dirname(__file__), "wordlist.txt")
-_WORDLIST = xp.generate_wordlist(wordfile=_WORDLIST_PATH, min_length=3)
+_WORDLIST_PATH = Path(__file__).parent / "wordlist.txt"
+_WORDLIST = xp.generate_wordlist(wordfile=str(_WORDLIST_PATH), min_length=3)
 
 
 class UserKeyService(Service):
@@ -34,7 +34,7 @@ class UserKeyService(Service):
         """Return the member's current active key, or None."""
         return await self._repo.get_by_user(member.id)
 
-    async def get_user_profile(self, member: discord.Member) -> dict | None:
+    async def get_user_profile(self, member: discord.Member) -> dict[str, Any] | None:
         """Return the unified user profile for a member, or None."""
         return await self._repo.get_user_profile(member.id)
 
@@ -43,7 +43,7 @@ class UserKeyService(Service):
         await self._repo.link_rsn(member.id, rsn)
         logger.info(f"UserKeyService: linked RSN {rsn!r} for {member} ({member.id})")
 
-    async def get_user_accounts(self, member: discord.Member) -> list[dict]:
+    async def get_user_accounts(self, member: discord.Member) -> list[dict[str, Any]]:
         """Return all linked RSN accounts for a member."""
         return await self._repo.get_user_accounts(member.id)
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import discord
 
 
@@ -16,7 +18,7 @@ def status_layout(content: str) -> discord.ui.LayoutView:
     return view
 
 
-def header_items(attachment_filename: str | None) -> list[discord.ui.Item]:
+def header_items(attachment_filename: str | None) -> list[discord.ui.Item[Any]]:
     """Returns a single-image MediaGallery if a filename is provided, else empty list.
 
     Pass the result as leading *args to discord.ui.Container so the header image

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 import discord
 
@@ -13,16 +14,16 @@ def _ts(iso: str | None) -> str:
     try:
         dt = datetime.fromisoformat(iso.rstrip("Z"))
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return f" <t:{int(dt.timestamp())}:R>"
-    except (ValueError, OSError):
+    except ValueError, OSError:
         return ""
 
 
 def build(
-    section: NameChangesSection, live_data: dict, guild: discord.Guild
-) -> list[discord.ui.Item]:
-    changes: list[dict] = live_data.get("name_changes") or []
+    section: NameChangesSection, live_data: dict[str, Any], guild: discord.Guild
+) -> list[discord.ui.Item[Any]]:
+    changes: list[dict[str, Any]] = live_data.get("name_changes") or []
     shown = changes[: section.count]
 
     lines: list[str] = ["## Recent Name Changes", ""]

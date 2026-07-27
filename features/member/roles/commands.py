@@ -284,7 +284,7 @@ class RolePanelGroup(
     )
     @app_commands.describe(
         panel_id="Panel to update",
-        max="Maximum roles selectable at once (1–25); 0 = unlimited",
+        max="Maximum roles selectable at once (1-25); 0 = unlimited",
     )
     @is_staff()
     async def setmax(
@@ -478,8 +478,10 @@ class _ConfirmDeleteView(discord.ui.View):
 
     @discord.ui.button(label="Confirm Delete", style=discord.ButtonStyle.danger)
     async def confirm(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:  # noqa: ARG002
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button[_ConfirmDeleteView],
+    ) -> None:
         await interaction.response.defer(ephemeral=True, thinking=True)
         success = await self._service.delete_panel(self._panel_id)
         if success:
@@ -494,7 +496,9 @@ class _ConfirmDeleteView(discord.ui.View):
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
     async def cancel(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ) -> None:  # noqa: ARG002
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button[_ConfirmDeleteView],
+    ) -> None:
         await interaction.response.send_message("Cancelled.", ephemeral=True)
         self.stop()

@@ -12,7 +12,7 @@ from core.command_infra.checks import handle_check_failure
 if TYPE_CHECKING:
     from features.user_keys.service import UserKeyService
 
-# OSRS RSN: 1–12 chars, letters / digits / spaces / hyphens
+# OSRS RSN: 1-12 chars, letters / digits / spaces / hyphens
 _RSN_RE = re.compile(r"^[A-Za-z0-9 \-]{1,12}$")
 
 
@@ -21,7 +21,7 @@ def _validate_rsn(rsn: str) -> str | None:
     rsn = rsn.strip()
     if not rsn or not _RSN_RE.match(rsn):
         return (
-            "Invalid RSN. Must be 1–12 characters (letters, numbers, spaces, hyphens)."
+            "Invalid RSN. Must be 1-12 characters (letters, numbers, spaces, hyphens)."
         )
     return None
 
@@ -63,7 +63,7 @@ class AltsGroup(
     @app_commands.command(
         name="add", description="Link an additional RSN to your account"
     )
-    @app_commands.describe(rsn="Alt RSN to link (1–12 characters)")
+    @app_commands.describe(rsn="Alt RSN to link (1-12 characters)")
     async def add(self, interaction: discord.Interaction, rsn: str) -> None:
         """Add an alt RSN."""
         if not isinstance(interaction.user, discord.Member):
@@ -209,7 +209,7 @@ class AccountGroup(
         name="link",
         description="Link your Old School RuneScape username to your Discord account",
     )
-    @app_commands.describe(rsn="Your in-game username (1–12 characters)")
+    @app_commands.describe(rsn="Your in-game username (1-12 characters)")
     async def link(self, interaction: discord.Interaction, rsn: str) -> None:
         """Link an RSN to the member's account."""
         if not isinstance(interaction.user, discord.Member):
@@ -221,7 +221,7 @@ class AccountGroup(
         rsn = rsn.strip()
         if not _RSN_RE.match(rsn):
             await interaction.response.send_message(
-                "Invalid RSN. Must be 1–12 characters (letters, numbers, spaces, hyphens).",
+                "Invalid RSN. Must be 1-12 characters (letters, numbers, spaces, hyphens).",
                 ephemeral=True,
             )
             return

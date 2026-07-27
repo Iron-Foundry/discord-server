@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+from typing import Any
+
 import discord
 
 from features.info_panel.models import ChannelTocSection
 
 
 def build(
-    section: ChannelTocSection, live_data: dict, guild: discord.Guild
-) -> list[discord.ui.Item]:
+    section: ChannelTocSection, live_data: dict[str, Any], guild: discord.Guild
+) -> list[discord.ui.Item[Any]]:
     if not section.channels:
         return []
 

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 import httpx
@@ -37,7 +38,7 @@ class InfoPanelService(Service):
         self._client = client
         self._messages: list[discord.Message] = []
         self._panel_channel: discord.TextChannel | None = None
-        self._refresh_task: asyncio.Task | None = None
+        self._refresh_task: asyncio.Task[None] | None = None
 
     async def initialize(self) -> None:
         pass
@@ -102,10 +103,8 @@ class InfoPanelService(Service):
     async def clear_panel(self) -> None:
         """Delete panel messages and clear stored state."""
         for msg in self._messages:
-            try:
+            with contextlib.suppress(discord.HTTPException):
                 await msg.delete()
-            except discord.HTTPException:
-                pass
         self._messages = []
         self._panel_channel = None
         await self._repo.clear_panel_state()
@@ -161,7 +160,7 @@ class InfoPanelService(Service):
 
     # ── Data fetching ─────────────────────────────────────────────────────
 
-    async def _fetch_live_data(self, config: InfoPanelConfig) -> dict:
+    async def _fetch_live_data(self, config: InfoPanelConfig) -> dict[str, Any]:
         api_url = os.getenv("API_BACKEND_URL", "").rstrip("/")
         if not api_url:
             return {}
@@ -184,11 +183,11 @@ class InfoPanelService(Service):
         for section in all_sections:
             if section.type == "achievements":
                 requests.append(
-                    ("achievements", f"/clan/recent-achievements?limit={section.count}")  # type: ignore[union-attr]
+                    ("achievements", f"/clan/recent-achievements?limit={section.count}")
                 )
             elif section.type == "personal_bests":
                 requests.append(
-                    ("personal_bests", f"/clan/personal-bests?limit={section.count}")  # type: ignore[union-attr]
+                    ("personal_bests", f"/clan/personal-bests?limit={section.count}")
                 )
 
         if not requests:

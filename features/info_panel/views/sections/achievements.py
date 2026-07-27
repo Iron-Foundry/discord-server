@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 import discord
 
@@ -19,9 +20,9 @@ def _ts(iso: str | None) -> str:
     try:
         dt = datetime.fromisoformat(iso.rstrip("Z"))
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return f" <t:{int(dt.timestamp())}:R>"
-    except (ValueError, OSError):
+    except ValueError, OSError:
         return ""
 
 
@@ -38,9 +39,9 @@ def _fmt_value(event_type: str, value: int | None) -> str:
 
 
 def build(
-    section: AchievementsSection, live_data: dict, guild: discord.Guild
-) -> list[discord.ui.Item]:
-    achievements: list[dict] = live_data.get("achievements") or []
+    section: AchievementsSection, live_data: dict[str, Any], guild: discord.Guild
+) -> list[discord.ui.Item[Any]]:
+    achievements: list[dict[str, Any]] = live_data.get("achievements") or []
     shown = achievements[: section.count]
 
     lines: list[str] = ["## Recent Achievements", ""]

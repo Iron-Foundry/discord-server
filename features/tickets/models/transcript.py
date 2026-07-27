@@ -1,8 +1,9 @@
-import discord
-from enum import Enum
-from pydantic import BaseModel, Field
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any, Protocol
+
+import discord
+from pydantic import BaseModel, Field
 
 
 class AttachmentInfo(BaseModel):
@@ -26,7 +27,7 @@ class TranscriptEntry(BaseModel):
     embeds: list[Any] = Field(default_factory=list)
 
     @classmethod
-    def from_discord_message(cls, message: discord.Message) -> "TranscriptEntry":
+    def from_discord_message(cls, message: discord.Message) -> TranscriptEntry:
         return cls(
             message_id=message.id,
             author_id=message.author.id,
@@ -50,7 +51,7 @@ class TranscriptEntry(BaseModel):
         )
 
 
-class StaffActionType(str, Enum):
+class StaffActionType(StrEnum):
     CLOSED = "closed"
     REOPENED = "reopened"
     ADDED_USER = "added_user"
@@ -133,8 +134,9 @@ class Transcript(BaseModel):
             ts = entry.timestamp.strftime("%H:%M")
             prefix = "[BOT]" if entry.author_is_bot else ""
             lines.append(f"[{ts}] {prefix}{entry.author_display_name}: {entry.content}")
-            for att in entry.attachments:
-                lines.append(f"         📎 {att.filename} - {att.url}")
+            lines.extend(
+                f"         📎 {att.filename} - {att.url}" for att in entry.attachments
+            )
         if self.staff_actions:
             lines += ["", "=" * 60, "Staff Actions", ""]
             for action in self.staff_actions:

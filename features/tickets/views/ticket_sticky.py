@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 _RANK_TICKET_TYPES = {TicketTypeId.RANKUP.value, TicketTypeId.JOIN_CC.value}
 
 
-class _FreezeButton(discord.ui.Button):
+class _FreezeButton(discord.ui.Button[Any]):
     def __init__(self, service: TicketService, is_frozen: bool = False) -> None:
         self._service = service
         label = "Unfreeze" if is_frozen else "Freeze"
@@ -97,7 +97,7 @@ class TicketStickyView(discord.ui.LayoutView):
             AddUserButton(service),
             RemoveUserButton(service),
         )
-        container_items: list[discord.ui.Item] = [
+        container_items: list[discord.ui.Item[Any]] = [
             discord.ui.TextDisplay(content="### Ticket Toolbar"),
             discord.ui.Separator(),
             standard_row,

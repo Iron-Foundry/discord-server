@@ -20,6 +20,7 @@ from features.tickets.models.transcript import Transcript
 _PANEL_KEY = "panel"
 _TICKET_KEY = "ticket"
 _JSONB_COLUMNS = {"reopen_history", "metadata"}
+_TICKET_COLUMNS = {column.name for column in OrmTicket.__table__.columns}
 
 
 class PgTicketRepository:
@@ -72,6 +73,9 @@ class PgTicketRepository:
         """
         if not fields:
             return
+        unknown = set(fields) - _TICKET_COLUMNS
+        if unknown:
+            raise ValueError(f"Unknown ticket columns: {sorted(unknown)}")
         params: dict[str, Any] = {"ticket_id": ticket_id}
         assignments: list[str] = []
         for key, value in fields.items():
@@ -200,7 +204,7 @@ class PgTicketRepository:
         self, guild_id: int, channel_id: int, message_id: int
     ) -> None:
         """Persist the panel channel and message IDs for a guild."""
-        value: dict = {"channel_id": channel_id, "message_id": message_id}
+        value: dict[str, Any] = {"channel_id": channel_id, "message_id": message_id}
         stmt = (
             pg_insert(Config)
             .values(guild_id=guild_id, key=_PANEL_KEY, value=value)
@@ -240,7 +244,7 @@ class PgTicketRepository:
     # Rank details config
     # -------------------------------------------------------------------------
 
-    async def get_rank_details_config(self, guild_id: int) -> dict | None:
+    async def get_rank_details_config(self, guild_id: int) -> dict[str, Any] | None:
         """Return the rank details config document for a guild, or None."""
         async with self._factory() as session:
             result = await session.execute(
@@ -286,7 +290,9 @@ class PgTicketRepository:
             await session.execute(stmt)
             await session.commit()
 
-    async def get_image(self, guild_id: int, type_id: str, name: str) -> dict | None:
+    async def get_image(
+        self, guild_id: int, type_id: str, name: str
+    ) -> dict[str, Any] | None:
         """Return {filename, data} for any stored image by type and name, or None."""
         async with self._factory() as session:
             result = await session.execute(
@@ -304,11 +310,15 @@ class PgTicketRepository:
             "data": base64.b64decode(row[data_key]),
         }
 
-    async def get_header_image(self, guild_id: int, type_id: str) -> dict | None:
+    async def get_header_image(
+        self, guild_id: int, type_id: str
+    ) -> dict[str, Any] | None:
         """Return {filename, data} for a type or panel header image, or None."""
         return await self.get_image(guild_id, type_id, "header")
 
-    async def get_type_config_overrides(self, guild_id: int) -> dict[str, dict]:
+    async def get_type_config_overrides(
+        self, guild_id: int
+    ) -> dict[str, dict[str, Any]]:
         """Return per-type config overrides written by the web UI, keyed by type identifier.
 
         Returns an empty dict for any type that has not been overridden.
@@ -551,7 +561,7 @@ class PgTicketRepository:
     ) -> list[LeaderboardEntry]:
         """Return top handlers ranked by tickets participated in."""
         where_clause = "WHERE t.guild_id = :guild_id"
-        params: dict = {"guild_id": guild_id, "limit": limit}
+        params: dict[str, Any] = {"guild_id": guild_id, "limit": limit}
         if since is not None:
             where_clause += " AND t.created_at >= :since"
             params["since"] = since
@@ -682,7 +692,7 @@ class PgTicketRepository:
 # ---------------------------------------------------------------------------
 
 
-def _record_to_orm_values(record: TicketRecord) -> dict:
+def _record_to_orm_values(record: TicketRecord) -> dict[str, Any]:
     """Convert a TicketRecord to a dict suitable for ORM insertion."""
     meta = dict(record.metadata)
     meta["_creator"] = record.creator.model_dump(mode="json")
@@ -716,8 +726,8 @@ def _orm_to_record(row: OrmTicket) -> TicketRecord:
     """Reconstruct a TicketRecord from an ORM Ticket row."""
     from features.tickets.models.ticket import ReopenEvent
 
-    meta: dict = dict(row.extra_metadata or {})
-    creator_data: dict | None = meta.pop("_creator", None)
+    meta: dict[str, Any] = dict(row.extra_metadata or {})
+    creator_data: dict[str, Any] | None = meta.pop("_creator", None)
 
     if creator_data:
         creator = MemberSnapshot.model_validate(creator_data)

@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Any, override
 import discord
 from loguru import logger
 
-from core.command_infra.help_registry import HelpRegistry
 from core.command_handler import CommandHandler
+from core.command_infra.help_registry import HelpRegistry
 from core.config import ConfigInterface, ConfigVars
 from core.service_handler import ServiceHandler
 from core.service_loader import load_all_services
@@ -18,11 +18,11 @@ if TYPE_CHECKING:
     from features.admin.service import AdminService
     from features.broadcast.service import BroadcastService
     from features.competition_schedule.service import CompScheduleService
-    from features.tickets.dm_service import DMTicketService
     from features.info_panel.service import InfoPanelService
     from features.member.join_roles.service import JoinRoleService
-    from features.parties.service import PartyService
     from features.member.roles.service import RoleService
+    from features.parties.service import PartyService
+    from features.tickets.dm_service import DMTicketService
     from features.tickets.ticket_service import TicketService
     from features.user_keys.service import UserKeyService
 
@@ -67,7 +67,7 @@ class DiscordClient(discord.Client):
 
     async def _init_services(self) -> None:
         """Initialise the PG session factory and load all services in parallel."""
-        from core.db import init_db, get_session_factory
+        from core.db import get_session_factory, init_db
 
         database_url = self.config.get_variable(ConfigVars.DATABASE_URL)
         if not database_url:
@@ -76,7 +76,8 @@ class DiscordClient(discord.Client):
 
         await init_db(database_url)
 
-        assert self._guild is not None
+        if self._guild is None:
+            raise RuntimeError("Guild is not resolved - cannot load services")
         services = await load_all_services(
             guild=self._guild,
             tree=self.command_handler.tree,

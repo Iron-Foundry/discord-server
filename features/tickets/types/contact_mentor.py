@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import discord
 from collections.abc import Callable, Coroutine
 from typing import Any
 
+import discord
+
 from core.common.ticket_types import TicketTypeId
-from features.tickets.models.ticket import TicketTypeConfig, TicketTeam, TicketRecord
+from features.tickets.models.ticket import TicketRecord, TicketTeam, TicketTypeConfig
 from features.tickets.views._layout_helpers import header_items
 
 
@@ -66,7 +67,7 @@ class ContactMentorTicket(TicketTypeConfig):
             TicketTeam(name="Mentors", role_id=mentor_role_id),
             TicketTeam(name="Staff", role_id=staff_role_id),
         ]
-        self._db_overrides: dict = {}
+        self._db_overrides: dict[str, Any] = {}
 
     @property
     def identifier(self) -> str:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from features.tickets.ticket_service import TicketService
 
 
-class _ReopenButton(discord.ui.Button):
+class _ReopenButton(discord.ui.Button[Any]):
     def __init__(self, service: TicketService, ticket_id: int) -> None:
         super().__init__(
             label="Reopen Ticket",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 import discord
 
@@ -21,16 +22,16 @@ def _ts(iso: str | None) -> str:
     try:
         dt = datetime.fromisoformat(iso.rstrip("Z"))
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return f" <t:{int(dt.timestamp())}:R>"
-    except (ValueError, OSError):
+    except ValueError, OSError:
         return ""
 
 
 def build(
-    section: PersonalBestsSection, live_data: dict, guild: discord.Guild
-) -> list[discord.ui.Item]:
-    pbs: list[dict] = live_data.get("personal_bests") or []
+    section: PersonalBestsSection, live_data: dict[str, Any], guild: discord.Guild
+) -> list[discord.ui.Item[Any]]:
+    pbs: list[dict[str, Any]] = live_data.get("personal_bests") or []
     shown = pbs[: section.count]
 
     lines: list[str] = ["## Rank 1 Personal Bests", ""]

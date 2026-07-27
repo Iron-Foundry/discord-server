@@ -20,16 +20,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from core.command_infra.help_registry import HelpRegistry
 
 if TYPE_CHECKING:
+    from core.discord_client import DiscordClient
     from features.action_log.service import ActionLogService
     from features.admin.service import AdminService
     from features.broadcast.service import BroadcastService
     from features.competition_schedule.service import CompScheduleService
-    from core.discord_client import DiscordClient
-    from features.tickets.dm_service import DMTicketService
     from features.info_panel.service import InfoPanelService
     from features.member.join_roles.service import JoinRoleService
-    from features.parties.service import PartyService
     from features.member.roles.service import RoleService
+    from features.parties.service import PartyService
+    from features.tickets.dm_service import DMTicketService
     from features.tickets.ticket_service import TicketService
     from features.user_keys.service import UserKeyService
 
@@ -97,10 +97,10 @@ async def load_action_log_service(
     client: DiscordClient,
 ) -> ActionLogService:
     """Initialise the action log service and register its slash commands."""
-    from features.action_log.pg_repository import PgActionLogRepository
-    from features.action_log.service import ActionLogService
     from features.action_log.commands import ActionLogGroup
     from features.action_log.commands import register_help as register_actionlog_help
+    from features.action_log.pg_repository import PgActionLogRepository
+    from features.action_log.service import ActionLogService
 
     repo = PgActionLogRepository(session_factory=session_factory)
     service = ActionLogService(guild=guild, client=client, repo=repo)
@@ -146,10 +146,10 @@ async def load_broadcast_service(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> BroadcastService:
     """Initialise the broadcast service and register its slash commands."""
-    from features.broadcast.pg_repository import PgBroadcastRepository
-    from features.broadcast.service import BroadcastService
     from features.broadcast.commands import BroadcastGroup, make_broadcast_context_menu
     from features.broadcast.commands import register_help as register_broadcast_help
+    from features.broadcast.pg_repository import PgBroadcastRepository
+    from features.broadcast.service import BroadcastService
 
     repo = PgBroadcastRepository(session_factory=session_factory)
     service = BroadcastService(guild=guild, repo=repo)
@@ -167,7 +167,7 @@ async def load_user_key_service(
     tree: app_commands.CommandTree,
     session_factory: async_sessionmaker[AsyncSession],
     client: DiscordClient,
-) -> "UserKeyService":
+) -> UserKeyService:
     """Initialise the user key service and register the /userkey command."""
     from features.account.commands import AccountGroup
     from features.user_keys.commands import make_privacy_command, make_userkey_command
@@ -193,7 +193,7 @@ async def load_info_panel_service(
     tree: app_commands.CommandTree,
     session_factory: async_sessionmaker[AsyncSession],
     client: DiscordClient,
-) -> "InfoPanelService":
+) -> InfoPanelService:
     """Initialise the info panel service and register /infopanel commands."""
     from features.info_panel.commands import InfoPanelGroup
     from features.info_panel.pg_repository import PgInfoPanelRepository
@@ -213,7 +213,7 @@ async def load_party_service(
     tree: app_commands.CommandTree,
     session_factory: async_sessionmaker[AsyncSession],
     client: DiscordClient,
-) -> "PartyService":
+) -> PartyService:
     """Initialise the party panel service and register /party commands."""
     from features.parties.commands import PartyGroup
     from features.parties.pg_repository import PgPartyRepository
@@ -232,7 +232,7 @@ async def load_admin_service(
     guild: discord.Guild,
     tree: app_commands.CommandTree,
     session_factory: async_sessionmaker[AsyncSession],
-) -> "AdminService":
+) -> AdminService:
     """Initialise the admin service and register /admin commands."""
     from features.admin.commands import AdminGroup
     from features.admin.service import AdminService
@@ -247,9 +247,9 @@ async def load_admin_service(
 
 async def load_competition_schedule_service(
     guild: discord.Guild,
-    client: "DiscordClient",
+    client: DiscordClient,
     session_factory: async_sessionmaker[AsyncSession],
-) -> "CompScheduleService":
+) -> CompScheduleService:
     """Initialise the competition schedule service."""
     from features.competition_schedule.service import CompScheduleService
 
@@ -299,11 +299,11 @@ async def load_all_services(
     BroadcastService,
     JoinRoleService,
     DMTicketService,
-    "UserKeyService",
-    "PartyService",
-    "InfoPanelService",
-    "CompScheduleService",
-    "AdminService",
+    UserKeyService,
+    PartyService,
+    InfoPanelService,
+    CompScheduleService,
+    AdminService,
 ]:
     """Load all services, then register the help command.
 

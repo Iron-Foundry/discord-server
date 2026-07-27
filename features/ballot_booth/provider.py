@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 from loguru import logger
@@ -25,7 +25,7 @@ class BallotBoothPollProvider:
         self,
         channel: discord.TextChannel,
         title: str,
-        options: list[dict],
+        options: list[dict[str, Any]],
         run_id: int,
         vote_cost: int,
         poll_ends_unix: int | None = None,
@@ -47,7 +47,7 @@ class BallotBoothPollProvider:
         message_id: int,
         run_id: int,
         title: str,
-        options: list[dict],
+        options: list[dict[str, Any]],
         vote_cost: int,
         poll_ends_unix: int | None,
     ) -> None:
@@ -74,7 +74,7 @@ class BallotBoothPollProvider:
         channel: discord.TextChannel,
         message_id: int,
         run_id: int,
-        options: list[dict],
+        options: list[dict[str, Any]],
         title: str,
     ) -> PollResult:
         tally = await self._repo.tally(run_id)
@@ -88,7 +88,7 @@ class BallotBoothPollProvider:
         return {"winning_metric": winner}
 
     @staticmethod
-    def _winner(tally: dict[str, int], options: list[dict]) -> str | None:
+    def _winner(tally: dict[str, int], options: list[dict[str, Any]]) -> str | None:
         if not tally:
             return None
         order = {o.get("metric"): i for i, o in enumerate(options)}

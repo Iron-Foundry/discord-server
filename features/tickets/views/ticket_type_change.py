@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from features.tickets.ticket_service import TicketService
 
 
-class ChangeTypeSelect(discord.ui.Select):
+class ChangeTypeSelect(discord.ui.Select[Any]):
     def __init__(
         self, service: TicketService, ticket_id: int, types: list[TicketTypeConfig]
     ) -> None:
@@ -62,7 +62,7 @@ class _ChangeTypeSelectView(discord.ui.View):
         self.add_item(ChangeTypeSelect(service, ticket_id, types))
 
 
-class ChangeTypeButton(discord.ui.Button):
+class ChangeTypeButton(discord.ui.Button[Any]):
     """Opens an ephemeral type picker. Used in the sticky bar."""
 
     def __init__(self, service: TicketService) -> None:

@@ -44,7 +44,7 @@ def make_broadcast_context_menu(
             ephemeral=True,
         )
 
-    return forward_to_members  # type: ignore[return-value]
+    return forward_to_members
 
 
 class BroadcastGroup(

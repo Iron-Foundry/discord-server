@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 import discord
 
@@ -16,7 +17,7 @@ POLL_BOOTH_ICON_URL = (
 _MAX_BALLOT_OPTIONS = 5
 
 
-def _booth_thumbnail() -> discord.ui.Thumbnail:
+def _booth_thumbnail() -> discord.ui.Thumbnail[Any]:
     return discord.ui.Thumbnail(
         media=discord.UnfurledMediaItem(url=POLL_BOOTH_ICON_URL)
     )
@@ -27,8 +28,8 @@ def _votes_label(count: int) -> str:
 
 
 def _option_items(
-    run_id: int, option: dict, vote_cost: int, count: int
-) -> list[discord.ui.Item]:
+    run_id: int, option: dict[str, Any], vote_cost: int, count: int
+) -> list[discord.ui.Item[Any]]:
     label = option.get("label", option.get("metric", "?"))
     icon_url = option.get("icon_url", "")
     button = discord.ui.Button(
@@ -37,7 +38,7 @@ def _option_items(
         custom_id=vote_custom_id(run_id, option.get("metric", ""), vote_cost),
     )
     text = discord.ui.TextDisplay(content=f"**{label}**\n-# {_votes_label(count)}")
-    header: discord.ui.Item = (
+    header: discord.ui.Item[Any] = (
         discord.ui.Section(
             text,
             accessory=discord.ui.Thumbnail(
@@ -64,7 +65,7 @@ class BallotBoothView(discord.ui.LayoutView):
         *,
         run_id: int,
         title: str,
-        options: list[dict],
+        options: list[dict[str, Any]],
         vote_cost: int,
         poll_ends_unix: int | None = None,
         tallies: dict[str, int] | None = None,
@@ -84,7 +85,7 @@ class BallotBoothView(discord.ui.LayoutView):
             f"{_closes_line(poll_ends_unix)}"
         )
 
-        children: list[discord.ui.Item] = [
+        children: list[discord.ui.Item[Any]] = [
             discord.ui.Section(
                 discord.ui.TextDisplay(content=header),
                 accessory=_booth_thumbnail(),
@@ -95,7 +96,7 @@ class BallotBoothView(discord.ui.LayoutView):
             count = counts.get(option.get("metric", ""), 0)
             children.extend(_option_items(run_id, option, vote_cost, count))
 
-        updated_unix = int(datetime.now(tz=timezone.utc).timestamp())
+        updated_unix = int(datetime.now(tz=UTC).timestamp())
         children.append(discord.ui.Separator())
         children.append(
             discord.ui.TextDisplay(content=f"-# Last updated: <t:{updated_unix}:R>")

@@ -1,9 +1,9 @@
-from enum import Enum
+from enum import StrEnum
 
 import discord
 
 
-class OsrsRank(str, Enum):
+class OsrsRank(StrEnum):
     SAPPHIRE = "Sapphire"
     EMERALD = "Emerald"
     RUBY = "Ruby"

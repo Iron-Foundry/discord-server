@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any, cast
 
 import discord
 import httpx
 from loguru import logger
 
+from core.service_base import Service
 from features.tickets.handlers.pg_repository import PgTicketRepository
 from features.tickets.models.stats import HandlerStats, LeaderboardEntry, SystemStats
 from features.tickets.models.ticket import (
@@ -26,8 +28,6 @@ from features.tickets.models.transcript import (
     Transcript,
     TranscriptHandler,
 )
-
-from core.service_base import Service
 
 TICKET_TIMEOUT_SECONDS = 86_400  # 24 hours
 _STICKY_IDLE_SECONDS = 20
@@ -73,7 +73,8 @@ class TicketService(Service):
         # channel_id → Ticket
         self.active_tickets: dict[int, Ticket] = {}
         # ticket_id → asyncio.Task
-        self._timeout_tasks: dict[int, asyncio.Task] = {}
+        self._timeout_tasks: dict[int, asyncio.Task[None]] = {}
+        self._pending_auto_closes: set[asyncio.Task[None]] = set()
         # name → (handler, enabled)
         self._transcript_handlers: dict[str, tuple[TranscriptHandler, bool]] = {
             "pg": (cast(TranscriptHandler, repo), True),
@@ -88,9 +89,9 @@ class TicketService(Service):
             httpx.AsyncClient() if self._uploadthing_secret else None
         )
         # ticket_id → sticky re-post task
-        self._sticky_tasks: dict[int, asyncio.Task] = {}
+        self._sticky_tasks: dict[int, asyncio.Task[None]] = {}
         self._panel_header_filename: str | None = None
-        self._config_refresh_task: asyncio.Task | None = None
+        self._config_refresh_task: asyncio.Task[None] | None = None
 
     # -------------------------------------------------------------------------
     # Startup - restart recovery
@@ -108,11 +109,11 @@ class TicketService(Service):
         # Register the global sticky view so existing sticky buttons work after restart.
         # Use a rank ticket type ID so PullRankScoreButton's custom_id is included,
         # since its callback handles type validation internally.
-        from core.common.ticket_types import TicketTypeId as _TID
+        from core.common.ticket_types import TicketTypeId as _TicketTypeId
         from features.tickets.views.ticket_sticky import TicketStickyView
 
         self._client.add_view(
-            TicketStickyView(service=self, ticket_type_id=_TID.RANKUP.value)
+            TicketStickyView(service=self, ticket_type_id=_TicketTypeId.RANKUP.value)
         )
 
         # Apply DB-sourced config overrides to all registered ticket types
@@ -171,7 +172,9 @@ class TicketService(Service):
                     logger.info(
                         f"Ticket #{record.ticket_id} timed out while offline - closing"
                     )
-                    asyncio.create_task(self._auto_close(ticket))
+                    auto_close = asyncio.create_task(self._auto_close(ticket))
+                    self._pending_auto_closes.add(auto_close)
+                    auto_close.add_done_callback(self._pending_auto_closes.discard)
                 else:
                     self._schedule_timeout(ticket, remaining)
 
@@ -203,13 +206,14 @@ class TicketService(Service):
     async def post_panel(self, channel: discord.TextChannel) -> None:
         """Post (or re-post) the ticket panel in the given channel."""
         import io
+
         from features.tickets.views.panel import build_panel_layout
 
         self._panel_channel = channel
         self._panel_category = channel.category
 
         hdr = await self.repo.get_header_image(self.guild.id, "panel")
-        send_kwargs: dict = {}
+        send_kwargs: dict[str, Any] = {}
         if hdr:
             send_kwargs["files"] = [
                 discord.File(io.BytesIO(hdr["data"]), filename=hdr["filename"])
@@ -397,9 +401,9 @@ class TicketService(Service):
 
             rank_files: list[discord.File] = []
             rank_images: dict[str, str] = {}
-            from core.common.ticket_types import TicketTypeId as _TID
+            from core.common.ticket_types import TicketTypeId as _TicketTypeId
 
-            if type_id in {_TID.RANKUP.value, _TID.JOIN_CC.value}:
+            if type_id in {_TicketTypeId.RANKUP.value, _TicketTypeId.JOIN_CC.value}:
                 for img_name in ("rank_reqs", "rank_upgrades"):
                     try:
                         img = await self.repo.get_image(
@@ -421,7 +425,7 @@ class TicketService(Service):
                         )
 
             all_files = ([header_file] if header_file else []) + rank_files
-            create_kwargs: dict = {}
+            create_kwargs: dict[str, Any] = {}
             if all_files:
                 create_kwargs["files"] = all_files
             await channel.send(
@@ -951,10 +955,8 @@ class TicketService(Service):
         task = self._timeout_tasks.pop(ticket_id, None)
         if task and not task.done():
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
 
     async def _timeout_handler(self, ticket: Ticket, delay: float) -> None:
         try:
@@ -1023,10 +1025,8 @@ class TicketService(Service):
         task = self._sticky_tasks.pop(ticket_id, None)
         if task and not task.done():
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
 
     # -------------------------------------------------------------------------
     # Helpers
@@ -1150,6 +1150,7 @@ class TicketService(Service):
     async def _config_refresh_subscriber(self) -> None:
         import json
         import os
+
         from valkey.asyncio import Valkey as ValkeyClient
 
         valkey_uri = os.getenv("VALKEY_URI", "redis://localhost:6379")
@@ -1179,10 +1180,8 @@ class TicketService(Service):
                                 )
                             if data.get("type_id") == "panel" and self._panel_channel:
                                 if self._panel_message:
-                                    try:
+                                    with contextlib.suppress(discord.NotFound):
                                         await self._panel_message.delete()
-                                    except discord.NotFound:
-                                        pass
                                     self._panel_message = None
                                 await self.post_panel(self._panel_channel)
                             else:

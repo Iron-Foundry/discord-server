@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import discord
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+import discord
 
 if TYPE_CHECKING:
     from features.tickets.models.ticket import TicketRecord, TicketTypeConfig
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 _SELECT_TIMEOUT = 120
 
 
-class _OpenTypeSelect(discord.ui.Select):
+class _OpenTypeSelect(discord.ui.Select[Any]):
     def __init__(
         self,
         service: TicketService,
@@ -79,7 +79,7 @@ class _OpenTypeSelectView(discord.ui.View):
         self.add_item(_OpenTypeSelect(service, member, types))
 
 
-class _ReopenSelect(discord.ui.Select):
+class _ReopenSelect(discord.ui.Select[Any]):
     def __init__(
         self,
         service: TicketService,
@@ -128,7 +128,7 @@ class _ReopenSelectView(discord.ui.View):
         self.add_item(_ReopenSelect(service, member, tickets))
 
 
-class _OpenButton(discord.ui.Button):
+class _OpenButton(discord.ui.Button[Any]):
     def __init__(self, service: TicketService, member: discord.Member) -> None:
         self._service = service
         self._member = member
@@ -147,7 +147,7 @@ class _OpenButton(discord.ui.Button):
         )
 
 
-class _ReopenButton(discord.ui.Button):
+class _ReopenButton(discord.ui.Button[Any]):
     def __init__(self, service: TicketService, member: discord.Member) -> None:
         self._service = service
         self._member = member

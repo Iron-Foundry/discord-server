@@ -2,28 +2,28 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .contact_mentor import ContactMentorModal, ContactMentorTicket
 from .general import GeneralTicket
-from .rankup import RankupTicket, RankupModal
 from .join_cc import JoinCCTicket
+from .rankup import RankupModal, RankupTicket
 from .sensitive import SensitiveTicket
-from .contact_mentor import ContactMentorTicket, ContactMentorModal
 
 if TYPE_CHECKING:
     from features.tickets.ticket_service import TicketService
 
 __all__ = [
-    "GeneralTicket",
-    "RankupTicket",
-    "RankupModal",
-    "JoinCCTicket",
-    "SensitiveTicket",
-    "ContactMentorTicket",
     "ContactMentorModal",
+    "ContactMentorTicket",
+    "GeneralTicket",
+    "JoinCCTicket",
+    "RankupModal",
+    "RankupTicket",
+    "SensitiveTicket",
     "register_all_types",
 ]
 
 
-def register_all_types(service: "TicketService") -> None:
+def register_all_types(service: TicketService) -> None:
     """
     Register all ticket types with the TicketService.
     Role IDs are read from environment variables:

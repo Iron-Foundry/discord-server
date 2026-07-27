@@ -8,15 +8,15 @@ from loguru import logger
 if TYPE_CHECKING:
     from core.discord_client import DiscordClient
 
+from core.service_base import Service
 from features.action_log.models import (
-    ActionLogConfig,
     CATEGORY_LABELS,
+    ActionLogConfig,
     LogCategory,
 )
-from features.action_log.registrar import EventRegistrar
 from features.action_log.pg_repository import PgActionLogRepository
+from features.action_log.registrar import EventRegistrar
 from features.action_log.throttle import MessageThrottle
-from core.service_base import Service
 
 
 class ActionLogService(Service):
@@ -82,13 +82,11 @@ class ActionLogService(Service):
         # For threads resolve via the parent channel; for regular channels use channel_id.
         resolve_id = parent_id if parent_id is not None else channel_id
         ch = self._guild.get_channel(resolve_id)
-        if (
+        return bool(
             isinstance(ch, discord.abc.GuildChannel)
             and ch.category_id is not None
             and ch.category_id in self._config.ignored_category_ids
-        ):
-            return True
-        return False
+        )
 
     async def setup_forum(self, forum: discord.ForumChannel) -> ActionLogConfig:
         """

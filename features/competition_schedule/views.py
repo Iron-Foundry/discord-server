@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from typing import Any
 
 import discord
 
@@ -16,12 +17,12 @@ SITE_URL = (
 _MEDAL = {1: "🥇", 2: "🥈", 3: "🥉"}
 
 
-def build_results_embed(data: dict) -> discord.Embed:
+def build_results_embed(data: dict[str, Any]) -> discord.Embed:
     """Build a results announcement embed from announce_results payload."""
     title = data.get("competition_title", "Competition")
     metric = data.get("metric", "")
     wom_id = data.get("wom_competition_id")
-    top_results: list[dict] = data.get("top_results", [])
+    top_results: list[dict[str, Any]] = data.get("top_results", [])
 
     embed = discord.Embed(
         title=f"{title} - Results",

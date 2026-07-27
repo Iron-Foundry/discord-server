@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import json
 import os
+from typing import Any
 
 import discord
 from loguru import logger
 
+from core.db.models import PartyDB
 from core.service_base import Service
 from features.parties.pg_repository import PgPartyRepository
 from features.parties.views.panel import build_panel_layout
@@ -24,7 +27,7 @@ _REFRESH_INTERVAL = 2.5  # seconds
 _ALLOWED_MENTIONS = discord.AllowedMentions(roles=True)
 
 
-def _state_hash(parties: list) -> str:
+def _state_hash(parties: list[PartyDB]) -> str:
     """Stable hash of all display-relevant party state."""
     parts: list[str] = []
     for p in parties:
@@ -35,7 +38,7 @@ def _state_hash(parties: list) -> str:
             f"{p.vibe}:{p.max_size}:{p.expires_at.isoformat()}:"
             f"{scheduled}:{member_ids}"
         )
-    return hashlib.md5("|".join(parts).encode()).hexdigest()
+    return hashlib.md5("|".join(parts).encode(), usedforsecurity=False).hexdigest()
 
 
 class PartyService(Service):
@@ -52,8 +55,8 @@ class PartyService(Service):
         self._client = client
         self._panel_message: discord.Message | None = None
         self._panel_channel: discord.TextChannel | None = None
-        self._refresh_task: asyncio.Task | None = None
-        self._notify_task: asyncio.Task | None = None
+        self._refresh_task: asyncio.Task[None] | None = None
+        self._notify_task: asyncio.Task[None] | None = None
         self._last_state_hash: str | None = None
 
     @property
@@ -102,13 +105,18 @@ class PartyService(Service):
         content: str | None = None,
         embed: discord.Embed | None = None,
     ) -> None:
+        payload: dict[str, Any] = {}
+        if content is not None:
+            payload["content"] = content
+        if embed is not None:
+            payload["embed"] = embed
         try:
             user = await self._client.fetch_user(int(user_id))
-            await user.send(content=content, embed=embed)
+            await user.send(**payload)
         except (discord.NotFound, discord.Forbidden, discord.HTTPException) as exc:
             logger.debug("PartyService: could not DM user {} - {}", user_id, exc)
 
-    def _build_embed(self, data: dict) -> discord.Embed:
+    def _build_embed(self, data: dict[str, Any]) -> discord.Embed:
         embed = discord.Embed(
             title=data.get("title"),
             description=data.get("description"),
@@ -176,7 +184,7 @@ class PartyService(Service):
 
     # ── Panel management ──────────────────────────────────────────────────
 
-    async def _fetch_state(self) -> list:
+    async def _fetch_state(self) -> list[PartyDB]:
         """Return active parties for building the panel."""
         return await self._repo.get_active_parties()
 
@@ -236,10 +244,8 @@ class PartyService(Service):
                     "PartyService: upgrading legacy panel to Components V2 in #{}",
                     self._panel_channel.name if self._panel_channel else "?",
                 )
-                try:
+                with contextlib.suppress(discord.NotFound):
                     await self._panel_message.delete()
-                except discord.NotFound:
-                    pass
                 self._panel_message = None
                 self._last_state_hash = None
                 await self._repo.clear_panel_config(self._guild.id)

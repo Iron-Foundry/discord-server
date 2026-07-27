@@ -26,10 +26,30 @@ dependencies = [
 [dependency-groups]
 dev = [
     "anyio>=4.11.0",
-    "pyright>=1.1.408",
+    "pyright>=1.1.411",
     "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.0",
     "testcontainers>=4.14.2",
 ]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E4", "E7", "E9", "F", "W", "I", "N", "UP", "B", "SIM", "RUF", "PLE",
+    "ASYNC", "DTZ", "LOG", "G", "C4", "RET", "PERF", "PTH", "S",
+]
+allowed-confusables = ["×", "➕", "➖", "’"]
+
+[tool.ruff.lint.per-file-ignores]
+# assert is the point of a test.
+"tests/**" = ["S101"]
+# StrEnum of environment variable names, not credential values.
+"core/config.py" = ["S105"]
+# Raw SQL is built from validated column names and generated bind placeholders;
+# every user value goes through a bind parameter.
+"features/tickets/handlers/pg_repository.py" = ["S608"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

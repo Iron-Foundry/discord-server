@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import discord
 
 from features.info_panel.models import (
@@ -33,9 +35,9 @@ _ACCENT = discord.Color.from_str("#C8A951")  # gold
 
 def _build_section_items(
     section: object,
-    live_data: dict,
+    live_data: dict[str, Any],
     guild: discord.Guild,
-) -> list[discord.ui.Item]:
+) -> list[discord.ui.Item[Any]]:
     if isinstance(section, HeaderImageSection):
         return header_image.build(section, live_data, guild)
     if isinstance(section, ServerStatsSection):
@@ -59,15 +61,15 @@ def _build_section_items(
 
 def build_views(
     config: InfoPanelConfig,
-    live_data: dict,
+    live_data: dict[str, Any],
     guild: discord.Guild,
 ) -> list[discord.ui.LayoutView]:
     """Return one LayoutView per message in config.messages."""
     views: list[discord.ui.LayoutView] = []
 
     for panel_message in config.messages:
-        container_items: list[discord.ui.Item] = []
-        top_level_rows: list[discord.ui.ActionRow] = []
+        container_items: list[discord.ui.Item[Any]] = []
+        top_level_rows: list[discord.ui.ActionRow[Any]] = []
 
         for section in panel_message.sections:
             section_items = _build_section_items(section, live_data, guild)

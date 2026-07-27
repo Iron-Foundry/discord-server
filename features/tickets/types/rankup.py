@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import discord
 from collections.abc import Callable, Coroutine
 from typing import Any
 
+import discord
+
 from core.common.ticket_types import TicketTypeId
-from features.tickets.models.ticket import TicketTypeConfig, TicketTeam, TicketRecord
+from features.tickets.models.ticket import TicketRecord, TicketTeam, TicketTypeConfig
 from features.tickets.views._layout_helpers import header_items
 
 _RANK_HINT = "Sapphire, Emerald, Ruby, Diamond, Dragonstone, Onyx, Zenyte"
@@ -56,7 +57,7 @@ class RankupTicket(TicketTypeConfig):
 
     def __init__(self, staff_role_id: int) -> None:
         self._teams = [TicketTeam(name="Staff", role_id=staff_role_id)]
-        self._db_overrides: dict = {}
+        self._db_overrides: dict[str, Any] = {}
 
     @property
     def identifier(self) -> str:
@@ -113,7 +114,7 @@ class RankupTicket(TicketTypeConfig):
             "`all items/requirements in the rank tier you are going for or upgrades thereof.`"
         )
         view = discord.ui.LayoutView(timeout=None)
-        children: list[discord.ui.Item] = [
+        children: list[discord.ui.Item[Any]] = [
             *header_items(header_attachment),
             discord.ui.TextDisplay(
                 content=(

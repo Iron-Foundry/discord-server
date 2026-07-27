@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import os
-from enum import Enum
+from enum import StrEnum
+from typing import Any
 
 from dotenv import load_dotenv
 from loguru import logger
 
 
-class ConfigVars(str, Enum):
+class ConfigVars(StrEnum):
     """Environment variable keys"""
 
     DISCORD_TOKEN = "DISCORD_TOKEN"
@@ -33,7 +34,7 @@ class ConfigInterface:
         logger.info("Reloading Environment")
         load_dotenv()
 
-    def get_variable(self, variable: "ConfigVars | str") -> str | None:
+    def get_variable(self, variable: ConfigVars | str) -> str | None:
         key = variable.value if isinstance(variable, ConfigVars) else variable
         logger.info(f"Fetching environment variable: {key}")
         return os.getenv(key, None)
@@ -50,7 +51,7 @@ async def get_staff_role_ids() -> dict[str, int | None]:
     from core.db import get_session_factory
     from core.db.models import Config
 
-    data: dict = {}
+    data: dict[str, Any] = {}
     try:
         async with get_session_factory()() as session:
             result = await session.execute(
@@ -59,8 +60,8 @@ async def get_staff_role_ids() -> dict[str, int | None]:
                 )
             )
             data = result.scalar_one_or_none() or {}
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(f"Role config unavailable, falling back to env: {exc}")
 
     def _resolve(db_val: str, env_key: str) -> int | None:
         val = db_val or os.getenv(env_key)

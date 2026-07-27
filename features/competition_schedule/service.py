@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from collections.abc import Coroutine
+from typing import Any
 
 import discord
 from loguru import logger
@@ -13,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from core.service_base import Service
 from features.ballot_booth.provider import BallotBoothPollProvider
 from features.ballot_booth.vote_button import BallotVoteButton
+
 from .poll_provider import DiscordNativePollProvider, PollProvider
 from .views import build_results_embed
 
@@ -42,9 +45,16 @@ class CompScheduleService(Service):
             poll_provider or DiscordNativePollProvider()
         )
         self._ballot_provider = BallotBoothPollProvider(session_factory)
-        self._poll_task: asyncio.Task | None = None
-        self._close_task: asyncio.Task | None = None
-        self._announce_task: asyncio.Task | None = None
+        self._poll_task: asyncio.Task[None] | None = None
+        self._close_task: asyncio.Task[None] | None = None
+        self._announce_task: asyncio.Task[None] | None = None
+        self._pending_handlers: set[asyncio.Task[None]] = set()
+
+    def _spawn_handler(self, coro: Coroutine[Any, Any, None], name: str) -> None:
+        """Run a per-message handler, holding a strong reference until it finishes."""
+        task = asyncio.create_task(coro, name=name)
+        self._pending_handlers.add(task)
+        task.add_done_callback(self._pending_handlers.discard)
 
     async def initialize(self) -> None:
         pass
@@ -81,9 +91,9 @@ class CompScheduleService(Service):
                             continue
                         try:
                             data = json.loads(raw["data"])
-                            asyncio.create_task(
+                            self._spawn_handler(
                                 self._handle_create_poll(data),
-                                name=f"comp-poll-{data.get('run_id')}",
+                                f"comp-poll-{data.get('run_id')}",
                             )
                         except Exception as exc:
                             logger.warning(
@@ -126,9 +136,9 @@ class CompScheduleService(Service):
                                 if channel == _CH_UPDATE_POLL
                                 else self._handle_close_poll
                             )
-                            asyncio.create_task(
+                            self._spawn_handler(
                                 handler(data),
-                                name=f"comp-close-{data.get('run_id')}",
+                                f"comp-close-{data.get('run_id')}",
                             )
                         except Exception as exc:
                             logger.warning(
@@ -163,9 +173,9 @@ class CompScheduleService(Service):
                             continue
                         try:
                             data = json.loads(raw["data"])
-                            asyncio.create_task(
+                            self._spawn_handler(
                                 self._handle_announce(data),
-                                name=f"comp-announce-{data.get('run_id')}",
+                                f"comp-announce-{data.get('run_id')}",
                             )
                         except Exception as exc:
                             logger.warning(
@@ -214,10 +224,10 @@ class CompScheduleService(Service):
             return None
         return channel
 
-    async def _handle_create_poll(self, data: dict) -> None:
+    async def _handle_create_poll(self, data: dict[str, Any]) -> None:
         run_id = data.get("run_id")
         channel_id = data.get("channel_id")
-        options: list[dict] = data.get("options", [])
+        options: list[dict[str, Any]] = data.get("options", [])
         duration_hours: float = data.get("poll_duration_hours", 24.0)
         title: str = data.get("title", "What should we compete on?")
         poll_version: int = data.get("poll_version", 1)
@@ -274,11 +284,11 @@ class CompScheduleService(Service):
                 exc,
             )
 
-    async def _handle_close_poll(self, data: dict) -> None:
+    async def _handle_close_poll(self, data: dict[str, Any]) -> None:
         run_id = data.get("run_id")
         channel_id = data.get("channel_id")
         message_id = data.get("message_id")
-        options: list[dict] = data.get("options", [])
+        options: list[dict[str, Any]] = data.get("options", [])
         poll_version: int = data.get("poll_version", 1)
         title: str = data.get("title", "Competition")
 
@@ -336,11 +346,11 @@ class CompScheduleService(Service):
                 exc,
             )
 
-    async def _handle_update_poll(self, data: dict) -> None:
+    async def _handle_update_poll(self, data: dict[str, Any]) -> None:
         run_id = data.get("run_id")
         channel_id = data.get("channel_id")
         message_id = data.get("message_id")
-        options: list[dict] = data.get("options", [])
+        options: list[dict[str, Any]] = data.get("options", [])
 
         if run_id is None or not channel_id or not message_id:
             return
@@ -360,7 +370,7 @@ class CompScheduleService(Service):
         )
         logger.info("CompScheduleService: updated ballot poll for run {}", run_id)
 
-    async def _handle_announce(self, data: dict) -> None:
+    async def _handle_announce(self, data: dict[str, Any]) -> None:
         results_channel_id = data.get("results_channel_id")
         if not results_channel_id:
             logger.warning("CompScheduleService: announce missing results_channel_id")

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 
@@ -49,7 +49,7 @@ class CloseReasonModal(discord.ui.Modal, title="Close Ticket"):
             )
 
 
-class CloseButton(discord.ui.Button):
+class CloseButton(discord.ui.Button[Any]):
     """Shows CloseReasonModal. Used in the sticky bar."""
 
     def __init__(self, service: TicketService) -> None:

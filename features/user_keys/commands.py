@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import discord
 from discord import app_commands
@@ -10,7 +10,9 @@ if TYPE_CHECKING:
     from features.user_keys.service import UserKeyService
 
 
-def make_userkey_command(service: UserKeyService) -> app_commands.Command:  # type: ignore[type-arg]
+def make_userkey_command(
+    service: UserKeyService,
+) -> app_commands.Command[Any, Any, Any]:
     """Return the /userkey slash command with the service injected."""
 
     @app_commands.command(
@@ -55,10 +57,12 @@ def make_userkey_command(service: UserKeyService) -> app_commands.Command:  # ty
                 ephemeral=True,
             )
 
-    return userkey  # type: ignore[return-value]
+    return userkey
 
 
-def make_privacy_command(service: UserKeyService) -> app_commands.Command:  # type: ignore[type-arg]
+def make_privacy_command(
+    service: UserKeyService,
+) -> app_commands.Command[Any, Any, Any]:
     """Return the /privacy slash command with the service injected."""
 
     @app_commands.command(
@@ -100,4 +104,4 @@ def make_privacy_command(service: UserKeyService) -> app_commands.Command:  # ty
                 ephemeral=True,
             )
 
-    return privacy  # type: ignore[return-value]
+    return privacy

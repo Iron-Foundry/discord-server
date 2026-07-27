@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import discord
 import httpx
@@ -81,7 +81,7 @@ async def _write_and_backfill(
     rsn: str,
     clan_rank: str | None,
 ) -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     await session.execute(
         pg_insert(User)
         .values(
@@ -127,7 +127,7 @@ async def _write_and_backfill(
             {"h": history, "uid": ua_id},
         )
 
-    lower_rsns = [r.lower() for r in ([rsn] + history)]
+    lower_rsns = [r.lower() for r in ([rsn, *history])]
     await session.execute(
         text(
             "UPDATE events SET user_id = :did, user_account_id = :ua "

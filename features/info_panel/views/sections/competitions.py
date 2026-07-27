@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 import discord
 
@@ -27,18 +28,18 @@ def _fmt_metric(metric: str) -> str:
 
 def build(
     section: CompetitionsSection,
-    live_data: dict,
+    live_data: dict[str, Any],
     guild: discord.Guild,
-) -> list[discord.ui.Item]:
-    competitions: list[dict] = live_data.get("competitions", [])
+) -> list[discord.ui.Item[Any]]:
+    competitions: list[dict[str, Any]] = live_data.get("competitions", [])
     active = [c for c in competitions if c.get("status") in ("ongoing", "upcoming")]
     if not active:
         return []
 
-    now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+    now_ms = int(datetime.now(tz=UTC).timestamp() * 1000)
 
     lines = ["## Competitions"]
-    buttons: list[discord.ui.Button] = []
+    buttons: list[discord.ui.Button[Any]] = []
 
     for comp in active[:5]:
         status = comp.get("status", "")
@@ -77,7 +78,9 @@ def build(
                 )
             )
 
-    items: list[discord.ui.Item] = [discord.ui.TextDisplay(content="\n".join(lines))]
+    items: list[discord.ui.Item[Any]] = [
+        discord.ui.TextDisplay(content="\n".join(lines))
+    ]
     if buttons:
         items.append(discord.ui.ActionRow(*buttons[:5]))
     return items

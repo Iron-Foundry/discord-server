@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Protocol, TypedDict, runtime_checkable
+from typing import Any, Protocol, TypedDict, runtime_checkable
 
 import discord
 from loguru import logger
@@ -24,7 +24,7 @@ class PollProvider(Protocol):
         self,
         channel: discord.TextChannel,
         question: str,
-        options: list[dict],
+        options: list[dict[str, Any]],
         duration_hours: float,
     ) -> int:
         """Post a poll to the channel and return the Discord message ID."""
@@ -34,7 +34,7 @@ class PollProvider(Protocol):
         self,
         channel: discord.TextChannel,
         message_id: int,
-        options: list[dict],
+        options: list[dict[str, Any]],
     ) -> PollResult:
         """Fetch the current poll state and return the winning metric (or None if no winner)."""
         ...
@@ -47,7 +47,7 @@ class DiscordNativePollProvider:
         self,
         channel: discord.TextChannel,
         question: str,
-        options: list[dict],
+        options: list[dict[str, Any]],
         duration_hours: float,
     ) -> int:
         poll = discord.Poll(
@@ -65,7 +65,7 @@ class DiscordNativePollProvider:
         self,
         channel: discord.TextChannel,
         message_id: int,
-        options: list[dict],
+        options: list[dict[str, Any]],
     ) -> PollResult:
         try:
             msg = await channel.fetch_message(message_id)

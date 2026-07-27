@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import discord
 from discord import app_commands
-from typing import TYPE_CHECKING
 
 from core.command_infra.checks import handle_check_failure, is_senior_staff
 from core.command_infra.help_registry import HelpEntry, HelpGroup, HelpRegistry

@@ -1,5 +1,7 @@
+from datetime import UTC, datetime
+from typing import Any
+
 import discord
-from datetime import datetime, UTC
 
 
 class EmbedBuilder:
@@ -9,7 +11,7 @@ class EmbedBuilder:
         self._title: str = ""
         self._description: str = ""
         self._color: discord.Color = discord.Color.blurple()
-        self._fields: list[dict] = []
+        self._fields: list[dict[str, Any]] = []
         self._footer: str | None = None
         self._thumbnail: str | None = None
         self._timestamp: datetime | None = None
@@ -28,44 +30,44 @@ class EmbedBuilder:
         return self._description
 
     @property
-    def fields(self) -> list[dict]:
+    def fields(self) -> list[dict[str, Any]]:
         return self._fields
 
-    def set_title(self, value: str) -> "EmbedBuilder":
+    def set_title(self, value: str) -> EmbedBuilder:
         if len(value) > 256:
             raise ValueError("Embed title must be 256 characters or fewer")
         self._title = value
         return self
 
-    def set_description(self, value: str) -> "EmbedBuilder":
+    def set_description(self, value: str) -> EmbedBuilder:
         if len(value) > 4096:
             raise ValueError("Embed description must be 4096 characters or fewer")
         self._description = value
         return self
 
-    def set_color(self, color: discord.Color) -> "EmbedBuilder":
+    def set_color(self, color: discord.Color) -> EmbedBuilder:
         self._color = color
         return self
 
-    def set_footer(self, text: str) -> "EmbedBuilder":
+    def set_footer(self, text: str) -> EmbedBuilder:
         self._footer = text
         return self
 
-    def set_thumbnail(self, url: str) -> "EmbedBuilder":
+    def set_thumbnail(self, url: str) -> EmbedBuilder:
         self._thumbnail = url
         return self
 
-    def set_timestamp(self, ts: datetime | None = None) -> "EmbedBuilder":
+    def set_timestamp(self, ts: datetime | None = None) -> EmbedBuilder:
         self._timestamp = ts or datetime.now(UTC)
         return self
 
-    def add_field(self, name: str, value: str, inline: bool = True) -> "EmbedBuilder":
+    def add_field(self, name: str, value: str, inline: bool = True) -> EmbedBuilder:
         if len(self._fields) >= 25:
             raise ValueError("Embed cannot have more than 25 fields")
         self._fields.append({"name": name, "value": value, "inline": inline})
         return self
 
-    def clear_fields(self) -> "EmbedBuilder":
+    def clear_fields(self) -> EmbedBuilder:
         self._fields = []
         return self
 

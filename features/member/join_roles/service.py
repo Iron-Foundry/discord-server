@@ -32,7 +32,8 @@ class JoinRoleService(Service):
 
     async def add_role(self, role_id: int) -> bool:
         """Add a role to the join list. Returns True if added, False if already present."""
-        assert self._config is not None
+        if self._config is None:
+            raise RuntimeError("JoinRoleService: config not loaded")
         if role_id in self._config.role_ids:
             logger.debug(f"JoinRoleService: role {role_id} already in join list")
             return False
@@ -43,7 +44,8 @@ class JoinRoleService(Service):
 
     async def remove_role(self, role_id: int) -> bool:
         """Remove a role from the join list. Returns True if removed, False if not found."""
-        assert self._config is not None
+        if self._config is None:
+            raise RuntimeError("JoinRoleService: config not loaded")
         if role_id not in self._config.role_ids:
             logger.debug(f"JoinRoleService: role {role_id} not in join list")
             return False

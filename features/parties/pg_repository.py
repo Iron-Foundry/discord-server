@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import random
+import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from loguru import logger
 from sqlalchemy import select
@@ -152,7 +153,7 @@ _WORDLIST = [
 
 
 def _generate_hub_code() -> str:
-    return "-".join(random.choices(_WORDLIST, k=3))
+    return "-".join(secrets.choice(_WORDLIST) for _ in range(3))
 
 
 def _with_members(q):  # type: ignore[no-untyped-def]
@@ -220,7 +221,7 @@ class PgPartyRepository:
         rsn: str | None,
     ) -> PartyDB | None:
         """Add a member to the party and return the updated party."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         async with self._factory() as session:
             result = await session.execute(
                 _with_members(select(PartyDB).where(PartyDB.id == party_id))
@@ -271,7 +272,7 @@ class PgPartyRepository:
             )
             return result.scalar_one_or_none()
 
-    async def get_notification_categories(self) -> list[dict]:
+    async def get_notification_categories(self) -> list[dict[str, Any]]:
         """Return the configured party notification categories from global config."""
         async with self._factory() as session:
             result = await session.execute(
@@ -281,7 +282,7 @@ class PgPartyRepository:
                 )
             )
             data = result.scalar_one_or_none() or {}
-            return data.get("categories", [])  # type: ignore[return-value]
+            return data.get("categories", [])
 
     # ── Mutations ──────────────────────────────────────────────────────────
 
@@ -299,7 +300,7 @@ class PgPartyRepository:
         notification_category_ids: list[str] | None = None,
     ) -> PartyDB:
         """Create a party record and add the leader as first member."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         party_id = str(uuid.uuid4())
         party = PartyDB(
             id=party_id,

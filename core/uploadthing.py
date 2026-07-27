@@ -30,5 +30,4 @@ async def upload_file(
     if not results:
         raise RuntimeError("UploadThing returned no results")
 
-    result = results[0] if isinstance(results, list) else results
-    return result.url
+    return results[0].url

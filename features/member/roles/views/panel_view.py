@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 
@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from features.member.roles.service import RoleService
 
 
-class ManageRolesButton(discord.ui.Button):
+class ManageRolesButton(discord.ui.Button[Any]):
     """Persistent button that opens an ephemeral pre-populated role select."""
 
     def __init__(self, panel: RolePanel) -> None:
@@ -27,7 +27,7 @@ class ManageRolesButton(discord.ui.Button):
         await view.service.handle_manage_open(interaction, self._panel_id)
 
 
-class ClearAllButton(discord.ui.Button):
+class ClearAllButton(discord.ui.Button[Any]):
     """Button that removes all panel roles from the member."""
 
     def __init__(self, panel: RolePanel) -> None:
@@ -55,7 +55,7 @@ class RoleSelectView(discord.ui.View):
         self.add_item(ClearAllButton(panel))
 
 
-class EphemeralRoleSelect(discord.ui.Select):
+class EphemeralRoleSelect(discord.ui.Select[Any]):
     """Non-persistent select menu pre-populated with the member's current roles."""
 
     def __init__(

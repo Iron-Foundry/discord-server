@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import discord
 from discord import app_commands
@@ -787,7 +787,7 @@ class TicketGroup(
     # /ticket setrankimage <image_type> <attachment>
     # ------------------------------------------------------------------
 
-    _IMAGE_TYPE_CHOICES = [
+    _IMAGE_TYPE_CHOICES: ClassVar[list[app_commands.Choice[str]]] = [
         app_commands.Choice(name="Rank Requirements", value="rank_reqs"),
         app_commands.Choice(name="Rank Upgrades", value="rank_upgrades"),
     ]

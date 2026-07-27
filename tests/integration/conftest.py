@@ -10,7 +10,11 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator, Iterator
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from core.db.models import Base
 
@@ -41,7 +45,9 @@ def _pg_dsn() -> Iterator[str]:
 
 
 @pytest.fixture
-async def session_factory(_pg_dsn: str) -> AsyncGenerator:
+async def session_factory(
+    _pg_dsn: str,
+) -> AsyncGenerator[async_sessionmaker[AsyncSession]]:
     engine = create_async_engine(_pg_dsn)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class TicketTypeId(str, Enum):
+class TicketTypeId(StrEnum):
     GENERAL = "general"
     RANKUP = "rankup"
     JOIN_CC = "join_cc"

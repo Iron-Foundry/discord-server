@@ -25,7 +25,7 @@ _STATUS_MESSAGES = {
 
 
 class BallotVoteButton(
-    discord.ui.DynamicItem[discord.ui.Button],
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=r"ballot_vote:(?P<run_id>\d+):(?P<metric>[a-z0-9_\-]+):(?P<cost>\d+)",
 ):
     """Persistent vote button; charges a ballot token per vote, one vote per poll."""

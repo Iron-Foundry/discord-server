@@ -26,7 +26,7 @@ _PERIOD_LABELS: dict[str, str] = {
 
 def _apply_base_layout(fig: go.Figure) -> None:
     """Apply the shared dark Discord-themed layout to a figure."""
-    fig.update_layout(  # type: ignore[call-arg]
+    fig.update_layout(
         paper_bgcolor=_BG,
         plot_bgcolor=_BG,
         font={"color": _TEXT, "family": "Arial, sans-serif"},
@@ -74,7 +74,7 @@ async def build_stats_chart(
         )
     )
     _apply_base_layout(fig)
-    fig.update_layout(  # type: ignore[call-arg]
+    fig.update_layout(
         title={
             "text": f"Tickets by Type - {display_name} ({period_label})",
             "font": {"color": _TEXT},
@@ -138,7 +138,7 @@ async def build_leaderboard_chart(
         )
     )
     _apply_base_layout(fig)
-    fig.update_layout(  # type: ignore[call-arg]
+    fig.update_layout(
         title={"text": chart_title, "font": {"color": _TEXT}},
         yaxis={"title": y_title, "gridcolor": _GRID, "zerolinecolor": _GRID},
     )
@@ -177,7 +177,7 @@ async def build_system_chart(
         )
     )
     _apply_base_layout(fig)
-    fig.update_layout(  # type: ignore[call-arg]
+    fig.update_layout(
         title={
             "text": f"Tickets by Type - System Overview ({period_label})",
             "font": {"color": _TEXT},

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, UTC
-from typing import TYPE_CHECKING
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 import discord
 
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from features.tickets.ticket_service import TicketService
 
 
-class _TicketOpenButton(discord.ui.Button):
+class _TicketOpenButton(discord.ui.Button[Any]):
     """Per-type open button. Stores service directly (discord.py #10335 workaround)."""
 
     def __init__(self, *, type_id: str, service: TicketService) -> None:
@@ -87,7 +87,7 @@ class TicketPanelLayoutView(discord.ui.LayoutView):
         super().__init__(timeout=None)
         enabled = service.type_registry.get_enabled()
 
-        children: list[discord.ui.Item] = [
+        children: list[discord.ui.Item[Any]] = [
             *header_items(header_filename),
             discord.ui.TextDisplay(content="## Iron Foundry - Support & Tickets"),
             discord.ui.Separator(),

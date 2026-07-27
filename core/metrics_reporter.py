@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -28,7 +29,7 @@ class MetricsReporter:
     def __init__(self, client: discord.Client) -> None:
         self._client = client
         self._api_url = os.getenv("API_BACKEND_URL", "").rstrip("/")
-        self._api_key = os.getenv("METRICS_API_KEY")
+        self._api_key = os.getenv("METRICS_API_KEY", "")
         self._start_time = time.monotonic()
         self._task: asyncio.Task[None] | None = None
 
@@ -44,10 +45,8 @@ class MetricsReporter:
     async def stop(self) -> None:
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
         logger.info("MetricsReporter stopped")
 
     async def _poll_loop(self) -> None:
@@ -86,7 +85,7 @@ class MetricsReporter:
         return modules
 
     async def _collect_tickets(self, session: Any) -> dict[str, Any]:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
         open_count = (

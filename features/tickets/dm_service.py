@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import discord
 from loguru import logger
 
 from core.service_base import Service
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from features.tickets.ticket_service import TicketService

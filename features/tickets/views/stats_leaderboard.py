@@ -97,7 +97,7 @@ class LeaderboardView(discord.ui.LayoutView):
                 )
             )
 
-        children: list[discord.ui.Item] = [
+        children: list[discord.ui.Item[Any]] = [
             discord.ui.TextDisplay(
                 content=_leaderboard_text(entries, names, period, metric)
             ),

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 import discord
 from loguru import logger
@@ -31,14 +31,14 @@ def _build_party_text(party: PartyDB) -> str:
     ends_aware = (
         party.expires_at
         if party.expires_at.tzinfo
-        else party.expires_at.replace(tzinfo=timezone.utc)
+        else party.expires_at.replace(tzinfo=UTC)
     )
     timing = f"Ends <t:{int(ends_aware.timestamp())}:R>"
     if party.scheduled_at:
         starts_aware = (
             party.scheduled_at
             if party.scheduled_at.tzinfo
-            else party.scheduled_at.replace(tzinfo=timezone.utc)
+            else party.scheduled_at.replace(tzinfo=UTC)
         )
         timing = (
             f"Starts <t:{int(starts_aware.timestamp())}:R>"
@@ -76,7 +76,7 @@ class _StatusLayout(discord.ui.LayoutView):
 # ── Per-party join button ─────────────────────────────────────────────────────
 
 
-class _PartyJoinButton(discord.ui.Button):
+class _PartyJoinButton(discord.ui.Button[Any]):
     """Direct join button for one party.
 
     Stores service reference directly - workaround for discord.py nested-view
@@ -155,7 +155,7 @@ class _PartyJoinButton(discord.ui.Button):
 # ── Panel action buttons ──────────────────────────────────────────────────────
 
 
-class CreatePartyButton(discord.ui.Button):
+class CreatePartyButton(discord.ui.Button[Any]):
     """Opens the party creation modal."""
 
     def __init__(self, service: PartyService) -> None:
@@ -172,7 +172,7 @@ class CreatePartyButton(discord.ui.Button):
         await interaction.response.send_modal(CreatePartyModal(service=self._service))
 
 
-class LeavePartyButton(discord.ui.Button):
+class LeavePartyButton(discord.ui.Button[Any]):
     """Leave any active party; closes it if the user is the leader."""
 
     def __init__(self, service: PartyService) -> None:
@@ -416,7 +416,7 @@ class PartyPanelLayoutView(discord.ui.LayoutView):
 
         header = "## Iron Foundry - Parties"
 
-        children: list[discord.ui.Item] = [
+        children: list[discord.ui.Item[Any]] = [
             discord.ui.TextDisplay(content=header),
             discord.ui.Separator(),
         ]
@@ -450,7 +450,7 @@ class PartyPanelLayoutView(discord.ui.LayoutView):
                     )
                 )
 
-        now_ts = int(datetime.now(timezone.utc).timestamp())
+        now_ts = int(datetime.now(UTC).timestamp())
         children.append(discord.ui.Separator())
         children.append(
             discord.ui.TextDisplay(content=f"-# Last updated <t:{now_ts}:R>")

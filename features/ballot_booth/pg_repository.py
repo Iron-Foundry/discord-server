@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 from loguru import logger
 from sqlalchemy import func, select, update
@@ -44,7 +45,7 @@ class PgBallotRepository:
         Status is one of ok, changed, unchanged, insufficient. A member is charged
         once per poll; switching to a different option later is free.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         async with self._factory() as session:
             inserted = await session.execute(
                 pg_insert(BallotPollVote)
@@ -114,7 +115,7 @@ class PgBallotRepository:
         balance = await self._balance(session, discord_user_id)
         return ("changed" if did_change else "unchanged"), balance
 
-    async def get_poll_context(self, run_id: int) -> dict | None:
+    async def get_poll_context(self, run_id: int) -> dict[str, Any] | None:
         """Return the poll title, icon-enriched options, and close time for a run."""
         async with self._factory() as session:
             run = await session.get(ScheduledCompetitionRun, run_id)
@@ -143,4 +144,4 @@ class PgBallotRepository:
                 .where(BallotPollVote.run_id == run_id)
                 .group_by(BallotPollVote.metric)
             )
-            return {metric: count for metric, count in rows.all()}
+            return dict(rows.tuples().all())
