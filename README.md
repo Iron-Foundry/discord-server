@@ -9,7 +9,7 @@ action logging, and general server automation.
 
 - Python 3.14+
 - [uv](https://docs.astral.sh/uv/) (package manager)
-- A running MongoDB instance
+- A running PostgreSQL instance
 
 ---
 
@@ -52,6 +52,8 @@ All configuration is read from a `.env` file in the project root.
 | Variable | Default | Description |
 |---|---|---|
 | `DEBUG_MODE` | - | Enable debug logging. |
+| `API_BACKEND_URL` | - | Internal api-backend base URL. Required for the 5-minute metrics report. |
+| `METRICS_API_KEY` | - | Shared service key for metrics reporting (managed by Infisical). |
 
 ---
 
@@ -67,6 +69,10 @@ All configuration is read from a `.env` file in the project root.
 | `/joinrole` | Configure roles auto-assigned to new members on join. |
 | `/actionlog` | Configure the action log forum and manage ignore lists. |
 | `/account` | Link an RSN and view linked account details. |
+| `/party` | Create and manage party panels. |
+| `/infopanel` | Create and manage info panels. |
+| `/admin` | Admin-only utilities. |
+| `/help` | Browse the registered command groups. |
 | `/userkey` | View or regenerate the RuneLite plugin verification key. |
 | `/privacy` | Opt out or back in to stats and loot data collection. |
 
@@ -82,6 +88,16 @@ core/
   config.py           - ConfigInterface, env-var access
   service_base.py     - Service abstract base class
   service_handler.py  - ServiceHandler lifecycle manager
+  metrics_reporter.py - periodic metrics POST to api-backend
+  uploadthing.py      - file upload client
+  command_infra/      - checks, handler groups, and the /help registry
+  common/             - shared helpers
+  db/                 - PostgreSQL engine and session management
+
+features/             - self-contained feature modules, each with its own service,
+                        repository, and commands (account, action_log, admin,
+                        ballot_booth, broadcast, competition_schedule, info_panel,
+                        member, parties, tickets, user_keys)
 ```
 
 ---
@@ -89,8 +105,12 @@ core/
 ## Development
 
 ```bash
-uv run ruff check .
 uv run ruff format .
+uv run ruff check . --fix
+uv run pyright
+uv run pytest
 ```
 
-Pre-commit hooks run Ruff and Prettier automatically on commit.
+Tests live in `tests/` - unit and contract tests at the top level, real-infra tests
+under `tests/integration/`. From the monorepo root, `./run-tests.sh` runs them
+alongside the other services.
