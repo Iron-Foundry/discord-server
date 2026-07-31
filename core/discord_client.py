@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from features.parties.service import PartyService
     from features.tickets.dm_service import DMTicketService
     from features.tickets.ticket_service import TicketService
+    from features.tilerace.service import TileRaceService
     from features.user_keys.service import UserKeyService
 
 
@@ -52,6 +53,7 @@ class DiscordClient(discord.Client):
         self.info_panel_service: InfoPanelService | None = None
         self.competition_schedule_service: CompScheduleService | None = None
         self.admin_service: AdminService | None = None
+        self.tilerace_service: TileRaceService | None = None
 
     async def _resolve_guild(self) -> None:
         """Look up the configured guild and bind it to the command handler."""
@@ -97,6 +99,7 @@ class DiscordClient(discord.Client):
             self.info_panel_service,
             self.competition_schedule_service,
             self.admin_service,
+            self.tilerace_service,
         ) = services
         self.service_handler.register(*services)
         self._services_loaded = True
