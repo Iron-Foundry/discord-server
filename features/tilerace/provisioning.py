@@ -22,6 +22,7 @@ def empty_result() -> dict[str, Any]:
         "category_id": None,
         "captains_role_id": None,
         "captains_channel_id": None,
+        "submissions_channel_id": None,
         "teams": [],
     }
 
@@ -69,8 +70,22 @@ async def apply(
         {int(uid) for uid in command.get("captain_user_ids", [])},
     )
 
+    team_roles: list[discord.Role] = []
     for team in command.get("teams", []):
-        sink["teams"].append(await _apply_team(guild, category, team, staff, toggles))
+        result, role = await _apply_team(guild, category, team, staff, toggles)
+        sink["teams"].append(result)
+        team_roles.append(role)
+
+    submissions = await guild_ops.ensure_shared_channel(
+        guild,
+        category,
+        _int_or_none(command.get("submissions_channel_id")),
+        "submissions",
+        team_roles,
+        staff,
+        toggles,
+    )
+    sink["submissions_channel_id"] = submissions.id
 
 
 async def _apply_team(
@@ -79,7 +94,7 @@ async def _apply_team(
     team: dict[str, Any],
     staff: discord.Role | None,
     toggles: dict[str, bool],
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], discord.Role]:
     role_name, text_name, voice_name = guild_ops.team_names(team)
     role = await guild_ops.ensure_role(
         guild, _int_or_none(team.get("role_id")), role_name
@@ -110,7 +125,7 @@ async def _apply_team(
         "role_id": role.id,
         "text_channel_id": text.id,
         "voice_channel_id": voice.id,
-    }
+    }, role
 
 
 async def teardown_team(guild: discord.Guild, command: dict[str, Any]) -> None:
@@ -137,6 +152,9 @@ async def teardown(guild: discord.Guild, command: dict[str, Any]) -> dict[str, A
             guild, _int_or_none(team.get("voice_channel_id"))
         )
         await guild_ops.delete_role(guild, _int_or_none(team.get("role_id")))
+    await guild_ops.delete_channel(
+        guild, _int_or_none(command.get("submissions_channel_id"))
+    )
     await guild_ops.delete_channel(
         guild, _int_or_none(command.get("captains_channel_id"))
     )

@@ -63,6 +63,34 @@ async def ensure_text_channel(
     )
 
 
+async def ensure_shared_channel(
+    guild: discord.Guild,
+    category: discord.CategoryChannel,
+    channel_id: int | None,
+    name: str,
+    team_roles: list[discord.Role],
+    staff: discord.Role | None,
+    toggles: dict[str, bool] | None = None,
+) -> discord.TextChannel:
+    """A channel every team can see, kept in step as teams come and go."""
+    extra = perms.text_flags(toggles)
+    existing = guild.get_channel(channel_id) if channel_id else None
+    if isinstance(existing, discord.TextChannel):
+        if existing.name != name:
+            await existing.edit(name=name, reason=_REASON)
+        for role in team_roles:
+            await perms.sync_role_overwrite(
+                existing, role, overwrites.member_grant(extra), _REASON
+            )
+        return existing
+    return await guild.create_text_channel(
+        name,
+        category=category,
+        overwrites=overwrites.shared_channel(guild, team_roles, staff, extra),
+        reason=_REASON,
+    )
+
+
 async def ensure_voice_channel(
     guild: discord.Guild,
     category: discord.CategoryChannel,

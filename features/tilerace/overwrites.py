@@ -57,6 +57,24 @@ def team_channel(
     return result
 
 
+def shared_channel(
+    guild: discord.Guild,
+    team_roles: list[discord.Role],
+    staff: discord.Role | None,
+    extra: dict[str, bool] | None = None,
+) -> _Overwrites:
+    """One channel every racing team can see, such as submissions."""
+    result: _Overwrites = {
+        guild.default_role: _HIDDEN,
+        guild.me: _VISIBLE,
+    }
+    for role in team_roles:
+        result[role] = member_grant(extra)
+    if staff is not None:
+        result[staff] = _staff_grant()
+    return result
+
+
 def captains_channel(
     guild: discord.Guild,
     captains_role: discord.Role,

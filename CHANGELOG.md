@@ -9,6 +9,21 @@ Bump with `uv version --bump patch|minor` (or `alpha|beta|rc` for a
 prerelease, `stable` to drop the tag). A MAJOR bump is the maintainer's call
 and is never made automatically.
 
+## [1.3.0] - 2026-08-01
+
+### Added
+
+- Tile race submissions. Provisioning now builds an event-wide `#submissions`
+  channel and posts a persistent Submit panel in it. Pressing Submit asks
+  api-backend which tile the caller's team is standing on and which requirements
+  still need proof, then opens a private thread for that submission.
+- Screenshots posted in the thread are converted to WebP and re-hosted on
+  UploadThing before the submission is recorded, so proof outlives the Discord
+  CDN link and stays viewable in the website's review queue.
+- Approve/Reject buttons in each thread, restricted to staff and persistent
+  across restarts via `DynamicItem`. Rejecting takes a reason in a modal, and
+  both verdicts apply to every requirement submitted in that thread.
+
 ## [1.2.0] - 2026-08-01
 
 ### Added

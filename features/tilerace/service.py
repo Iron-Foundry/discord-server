@@ -14,7 +14,7 @@ from loguru import logger
 from core.config import get_staff_role_ids
 from core.service_base import Service
 
-from . import api_client, provisioning
+from . import api_client, provisioning, submissions
 
 _VALKEY_URI = os.getenv("VALKEY_URI", "redis://localhost:6379")
 _CHANNEL = "foundry:tilerace_discord"
@@ -28,8 +28,9 @@ class TileRaceService(Service):
     the resulting object ids are handed straight back to api-backend.
     """
 
-    def __init__(self, guild: discord.Guild) -> None:
+    def __init__(self, guild: discord.Guild, client: discord.Client) -> None:
         self._guild = guild
+        self._client = client
         self._task: asyncio.Task[None] | None = None
         self._pending: set[asyncio.Task[None]] = set()
 
@@ -37,6 +38,8 @@ class TileRaceService(Service):
         pass
 
     async def post_ready(self) -> None:
+        self._client.add_view(submissions.SubmissionPanel())
+        self._client.add_dynamic_items(submissions.VerdictButton)
         self._task = asyncio.create_task(
             self._subscriber(), name="tilerace-discord-sub"
         )
@@ -104,6 +107,7 @@ class TileRaceService(Service):
                 result = await provisioning.teardown(self._guild, command)
             else:
                 await provisioning.apply(self._guild, command, staff, result)
+                await self._refresh_panel(command, result)
         except (discord.Forbidden, discord.HTTPException) as exc:
             logger.error(
                 "TileRaceService: {} failed part-way for event {} - {}",
@@ -120,6 +124,20 @@ class TileRaceService(Service):
                 event_id,
                 len(result["teams"]),
             )
+
+    async def _refresh_panel(
+        self, command: dict[str, Any], result: dict[str, Any]
+    ) -> None:
+        """Put a live Submit panel in the submissions channel after a setup.
+
+        A sync leaves an existing panel alone: re-posting on every roster edit
+        would bury the channel and break the pinned message teams look for.
+        """
+        if command.get("action") != "setup":
+            return
+        channel = self._guild.get_channel(result.get("submissions_channel_id") or 0)
+        if isinstance(channel, discord.TextChannel):
+            await submissions.refresh(channel)
 
     async def _staff_role(self) -> discord.Role | None:
         role_ids = await get_staff_role_ids()

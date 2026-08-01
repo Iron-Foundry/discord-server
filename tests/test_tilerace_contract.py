@@ -92,6 +92,7 @@ async def test_teardown_result_clears_every_id() -> None:
         category_id="900000000000000001",
         captains_role_id="900000000000000002",
         captains_channel_id="900000000000000003",
+        submissions_channel_id="900000000000000007",
     )
     result = await provisioning.teardown(_guild(), provisioned)
     assert result == fixture["teardown_result"]
@@ -138,6 +139,7 @@ def _provisioned_guild() -> tuple[MagicMock, dict[int, MagicMock]]:
 
     _channel(900000000000000001, "Summer Tile Race", discord.CategoryChannel)
     _channel(900000000000000003, "captains", discord.TextChannel)
+    _channel(900000000000000007, "submissions", discord.TextChannel)
     _channel(900000000000000005, "abyssal-ashes", discord.TextChannel)
     _channel(900000000000000006, "Abyssal Ashes", discord.VoiceChannel)
     role = AsyncMock()
@@ -167,6 +169,7 @@ def _provisioned_command(**permissions: bool) -> dict[str, Any]:
         category_id="900000000000000001",
         captains_role_id="900000000000000002",
         captains_channel_id="900000000000000003",
+        submissions_channel_id="900000000000000007",
         permissions={
             **dict.fromkeys(fixture["permission_toggles"], False),
             **permissions,

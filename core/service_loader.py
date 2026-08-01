@@ -262,14 +262,17 @@ async def load_competition_schedule_service(
     return service
 
 
-async def load_tilerace_service(guild: discord.Guild) -> TileRaceService:
-    """Initialise the tile race provisioning service (no slash commands).
+async def load_tilerace_service(
+    guild: discord.Guild, client: discord.Client
+) -> TileRaceService:
+    """Initialise the tile race provisioning and submissions service.
 
-    It is driven entirely from the website's Controls tab over Valkey pubsub.
+    Provisioning is driven entirely from the website's Controls tab over Valkey
+    pubsub; the submissions panel and its review buttons live in the guild.
     """
     from features.tilerace.service import TileRaceService
 
-    service = TileRaceService(guild=guild)
+    service = TileRaceService(guild=guild, client=client)
     await service.initialize()
     logger.info("Tile race service initialised")
     return service
@@ -337,7 +340,7 @@ async def load_all_services(
         load_info_panel_service(guild, tree, session_factory, client),
         load_competition_schedule_service(guild, client, session_factory),
         load_admin_service(guild, tree, session_factory),
-        load_tilerace_service(guild),
+        load_tilerace_service(guild, client),
     )
     ticket = cast("TicketService", _results[0])
     role = cast("RoleService", _results[1])
