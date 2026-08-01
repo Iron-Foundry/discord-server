@@ -9,6 +9,17 @@ Bump with `uv version --bump patch|minor` (or `alpha|beta|rc` for a
 prerelease, `stable` to drop the tag). A MAJOR bump is the maintainer's call
 and is never made automatically.
 
+## [1.4.0] - 2026-08-01
+
+### Added
+
+- Roll feedback in each team's own channel: a Components V2 card naming the
+  member who rolled, the dice and their total, the tile reached, and that tile's
+  title, description, icon and requirements. Traps, bonus rolls and reaching the
+  end pad are called out under the tile. A skipped turn says so instead. The
+  wording comes from api-backend, so the bot keeps holding no tile race state,
+  and a channel it cannot see is logged rather than raised.
+
 ## [1.3.1] - 2026-08-01
 
 ### Fixed

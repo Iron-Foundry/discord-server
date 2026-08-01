@@ -14,7 +14,7 @@ from loguru import logger
 from core.config import get_staff_role_ids
 from core.service_base import Service
 
-from . import api_client, provisioning, submissions
+from . import api_client, provisioning, roll_feed, submissions
 
 _VALKEY_URI = os.getenv("VALKEY_URI", "redis://localhost:6379")
 _CHANNEL = "foundry:tilerace_discord"
@@ -91,8 +91,11 @@ class TileRaceService(Service):
         if not event_id:
             logger.warning("TileRaceService: command without an event_id, ignoring")
             return
-        if action not in ("setup", "sync", "teardown", "teardown_team"):
+        if action not in ("setup", "sync", "teardown", "teardown_team", "roll"):
             logger.warning("TileRaceService: unknown action {}", action)
+            return
+        if action == "roll":
+            await roll_feed.announce(self._guild, command)
             return
         staff = await self._staff_role()
         result = provisioning.empty_result()
