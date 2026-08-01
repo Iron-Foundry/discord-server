@@ -9,6 +9,27 @@ Bump with `uv version --bump patch|minor` (or `alpha|beta|rc` for a
 prerelease, `stable` to drop the tag). A MAJOR bump is the maintainer's call
 and is never made automatically.
 
+## [1.1.1] - 2026-08-01
+
+### Security
+
+- aiohttp 3.13.1 -> 3.14.3, pillow 12.1.1 -> 12.3.0, idna 3.11 -> 3.18 and
+  python-dotenv 1.1.1 -> 1.2.2, clearing 49 Dependabot advisories. Lockfile
+  only - no declared constraint moved, and `kaleido==0.2.1` / `plotly<6` are
+  untouched, neither being a dependant of any upgraded package.
+- setuptools stays at 75.9.1 against advisories GHSA-5rjg-fvgr-3xxf and
+  GHSA-h35f-9h28-mq5c, which need 83.0.0. `upyloadthing 0.2.1` caps it at
+  `<76.0.0` and is already the latest release, so the cap is upstream's. The
+  high advisory is a path traversal in `PackageIndex.download`, reachable only
+  when setuptools fetches from a package index, which this bot never does.
+
+### Changed
+
+- The valkey dependency drops its non-existent `asyncio` extra. valkey ships
+  `valkey.asyncio` in the base package and provides only `libvalkey` and
+  `ocsp`, so `valkey[asyncio]` resolved to the same thing while making uv warn
+  on every lock.
+
 ## [1.1.0] - 2026-07-31
 
 ### Added
