@@ -24,7 +24,7 @@ class SubmissionCard(discord.ui.LayoutView):
         self._context = context
         self._author_id = author_id
         self._outstanding = [
-            leaf for leaf in context.get("leaves") or [] if not leaf.get("covered")
+            leaf for leaf in context.get("leaves") or [] if leaf.get("needed")
         ]
         self._chosen: list[str] = (
             [leaf["key"] for leaf in self._outstanding]

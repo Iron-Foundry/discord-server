@@ -44,13 +44,8 @@ def card_children(
     """The read-only half of a submission card: tile, team, requirement list."""
     tile = context.get("tile") or {}
     team = context.get("team") or {}
-    leaves = context.get("leaves") or []
-    outstanding = [leaf for leaf in leaves if not leaf.get("covered")]
-    lines = "\n".join(
-        f"- {'~~' if leaf.get('covered') else ''}{leaf['label']}"
-        f"{'~~ (submitted)' if leaf.get('covered') else ''}"
-        for leaf in leaves
-    )
+    outstanding = int(context.get("outstanding") or 0)
+    lines = "\n".join(context.get("requirement_lines") or [])
     return [
         discord.ui.TextDisplay(
             content=(
@@ -62,7 +57,7 @@ def card_children(
         ),
         discord.ui.Separator(),
         discord.ui.TextDisplay(
-            content=f"### Requirements ({len(outstanding)} outstanding)\n{lines}"
+            content=f"### Requirements ({outstanding} outstanding)\n{lines}"
         ),
         discord.ui.TextDisplay(
             content=(

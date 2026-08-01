@@ -37,13 +37,10 @@ async def open_submission(interaction: discord.Interaction) -> None:
             ephemeral=True,
         )
         return
-    outstanding = [
-        leaf for leaf in context.get("leaves") or [] if not leaf.get("covered")
-    ]
-    if not outstanding:
+    if not int(context.get("outstanding") or 0):
         await interaction.followup.send(
             view=status_layout(
-                "Every requirement on your current tile already has a submission."
+                "Your current tile is already fully covered by submissions."
             ),
             ephemeral=True,
         )

@@ -11,9 +11,12 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import discord
 import pytest
 
 from features.tilerace.submissions import api
+from features.tilerace.submissions.card import SubmissionCard
+from features.tilerace.submissions.layout import card_children
 
 _FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 
@@ -105,6 +108,52 @@ async def test_review_targets_the_thread_route() -> None:
     )
     assert http.request.call_args.kwargs["json"] == request
     assert result["tile_status"] in fixture["tile_statuses"]
+
+
+def test_the_card_prints_the_count_and_the_lines_the_api_sends() -> None:
+    """An "any one of" tile must not read as three separate obligations.
+
+    The bot counts no leaves of its own: api-backend knows an ``or`` costs one
+    submission, and sends both that count and the indented lines to print.
+    """
+    fixture = _fixture()
+    context = {**fixture["context_response"], **fixture["any_of_context_response"]}
+    body = "\n".join(
+        item.content
+        for item in card_children(context, "@Staff")
+        if isinstance(item, discord.ui.TextDisplay)
+    )
+
+    assert "### Requirements (1 outstanding)" in body
+    for line in context["requirement_lines"]:
+        assert line in body
+
+
+def test_the_select_offers_every_branch_of_an_unproved_choice() -> None:
+    fixture = _fixture()
+    context = {**fixture["context_response"], **fixture["any_of_context_response"]}
+    card = SubmissionCard(context, 111222333444555666, "@Staff")
+
+    options = [
+        option.value
+        for item in card.walk_children()
+        if isinstance(item, discord.ui.Select)
+        for option in item.options
+    ]
+    assert options == [leaf["key"] for leaf in context["leaves"]]
+
+
+def test_a_leaf_the_api_no_longer_needs_is_not_offered() -> None:
+    """One branch of an ``or`` landing takes the rest off the menu."""
+    fixture = _fixture()
+    context = {**fixture["context_response"], **fixture["any_of_context_response"]}
+    context["leaves"] = [
+        {**leaf, "needed": False, "covered": i == 1}
+        for i, leaf in enumerate(context["leaves"])
+    ]
+    card = SubmissionCard(context, 111222333444555666, "@Staff")
+
+    assert not any(isinstance(item, discord.ui.Select) for item in card.walk_children())
 
 
 async def test_an_error_response_surfaces_the_api_detail() -> None:

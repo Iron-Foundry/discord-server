@@ -9,6 +9,16 @@ Bump with `uv version --bump patch|minor` (or `alpha|beta|rc` for a
 prerelease, `stable` to drop the tag). A MAJOR bump is the maintainer's call
 and is never made automatically.
 
+## [1.4.1] - 2026-08-01
+
+### Fixed
+
+- The submission card no longer presents an "any one of" tile as several
+  outstanding requirements. It counted the unticked leaves itself, which cannot
+  tell a choice from a checklist; the count and the indented requirement lines
+  now both come from api-backend, and the dropdown offers the leaves the API
+  marks as still worth proving.
+
 ## [1.4.0] - 2026-08-01
 
 ### Added
