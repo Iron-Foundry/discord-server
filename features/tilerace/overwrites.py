@@ -18,10 +18,15 @@ def _staff_grant() -> discord.PermissionOverwrite:
     )
 
 
-def _member_grant() -> discord.PermissionOverwrite:
-    return discord.PermissionOverwrite(
+def member_grant(extra: dict[str, bool] | None = None) -> discord.PermissionOverwrite:
+    """The base grant a team role gets, plus whatever the event's toggles add."""
+    grant = discord.PermissionOverwrite(
         view_channel=True, send_messages=True, connect=True, speak=True
     )
+    flags: dict[str, bool] = extra or {}
+    for name, value in flags.items():
+        setattr(grant, name, value)
+    return grant
 
 
 def category(guild: discord.Guild, staff: discord.Role | None) -> _Overwrites:
@@ -36,13 +41,16 @@ def category(guild: discord.Guild, staff: discord.Role | None) -> _Overwrites:
 
 
 def team_channel(
-    guild: discord.Guild, team_role: discord.Role, staff: discord.Role | None
+    guild: discord.Guild,
+    team_role: discord.Role,
+    staff: discord.Role | None,
+    extra: dict[str, bool] | None = None,
 ) -> _Overwrites:
     """Only the team's own role, staff, and the bot can see a team channel."""
     result: _Overwrites = {
         guild.default_role: _HIDDEN,
         guild.me: _VISIBLE,
-        team_role: _member_grant(),
+        team_role: member_grant(extra),
     }
     if staff is not None:
         result[staff] = _staff_grant()
@@ -50,7 +58,10 @@ def team_channel(
 
 
 def captains_channel(
-    guild: discord.Guild, captains_role: discord.Role, staff: discord.Role | None
+    guild: discord.Guild,
+    captains_role: discord.Role,
+    staff: discord.Role | None,
+    extra: dict[str, bool] | None = None,
 ) -> _Overwrites:
     """The cross-team captains room: captains and staff only."""
-    return team_channel(guild, captains_role, staff)
+    return team_channel(guild, captains_role, staff, extra)

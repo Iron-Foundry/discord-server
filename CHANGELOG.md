@@ -9,6 +9,19 @@ Bump with `uv version --bump patch|minor` (or `alpha|beta|rc` for a
 prerelease, `stable` to drop the tag). A MAJOR bump is the maintainer's call
 and is never made automatically.
 
+## [Unreleased]
+
+### Added
+
+- Tile race commands carry the event's elevated channel permissions, and a sync
+  applies them to the channels that already exist. The team role's overwrite is
+  reconciled with `set_permissions`, which replaces only that role's entry: a
+  channel is never recreated, its history is kept, and an overwrite added by
+  hand in Discord survives. An unchanged channel costs no API call.
+- `pin_messages` uses Discord's own narrow permission (discord.py 2.7) rather
+  than `manage_messages`, so a team can pin without also gaining the ability to
+  delete each other's messages. `manage_messages` is its own toggle.
+
 ## [1.1.1] - 2026-08-01
 
 ### Security

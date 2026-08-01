@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from features.tilerace import naming, provisioning
+from features.tilerace import naming, perms, provisioning
 from features.tilerace.service import _CHANNEL
 
 _FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
@@ -117,6 +117,140 @@ async def test_result_is_posted_with_the_service_key() -> None:
     url = http.post.call_args.args[0]
     assert url == "http://api/tilerace/events/12/discord/result"
     assert http.post.call_args.kwargs["headers"] == {"verification-code": "key"}
+
+
+def _provisioned_guild() -> tuple[MagicMock, dict[int, MagicMock]]:
+    """A guild where every object the fixture names already exists."""
+    import discord
+
+    guild = _guild()
+    channels: dict[int, MagicMock] = {}
+
+    def _channel(oid: int, name: str, cls: type) -> MagicMock:
+        obj = MagicMock(spec=cls)
+        obj.id = oid
+        obj.name = name
+        obj.edit = AsyncMock()
+        obj.set_permissions = AsyncMock()
+        obj.overwrites_for = MagicMock(return_value=discord.PermissionOverwrite())
+        channels[oid] = obj
+        return obj
+
+    _channel(900000000000000001, "Summer Tile Race", discord.CategoryChannel)
+    _channel(900000000000000003, "captains", discord.TextChannel)
+    _channel(900000000000000005, "abyssal-ashes", discord.TextChannel)
+    _channel(900000000000000006, "Abyssal Ashes", discord.VoiceChannel)
+    role = AsyncMock()
+    role.id = 900000000000000004
+    role.name = "Abyssal Ashes"
+    role.members = []
+    captains_role = AsyncMock()
+    captains_role.id = 900000000000000002
+    captains_role.name = "Summer Tile Race Captains"
+    captains_role.members = []
+
+    guild.get_channel = MagicMock(side_effect=lambda oid: channels.get(oid))
+    guild.get_role = MagicMock(
+        side_effect=lambda oid: {
+            900000000000000002: captains_role,
+            900000000000000004: role,
+        }.get(oid)
+    )
+    return guild, channels
+
+
+def _provisioned_command(**permissions: bool) -> dict[str, Any]:
+    fixture = _fixture()
+    command = dict(fixture["command"])
+    command.update(
+        action="sync",
+        category_id="900000000000000001",
+        captains_role_id="900000000000000002",
+        captains_channel_id="900000000000000003",
+        permissions={
+            **dict.fromkeys(fixture["permission_toggles"], False),
+            **permissions,
+        },
+    )
+    command["teams"] = [
+        {
+            **fixture["command"]["teams"][0],
+            "role_id": "900000000000000004",
+            "text_channel_id": "900000000000000005",
+            "voice_channel_id": "900000000000000006",
+        }
+    ]
+    return command
+
+
+async def test_toggles_reach_existing_channels_without_recreating_them() -> None:
+    """A live event must gain the perms in place - no delete, no new channel."""
+    guild, channels = _provisioned_guild()
+    result = provisioning.empty_result()
+
+    await provisioning.apply(
+        guild,
+        _provisioned_command(pin_messages=True, mention_everyone=True),
+        None,
+        result,
+    )
+
+    guild.create_text_channel.assert_not_called()
+    guild.create_voice_channel.assert_not_called()
+    guild.create_category.assert_not_called()
+    for channel in channels.values():
+        channel.delete.assert_not_called()
+
+    text = channels[900000000000000005]
+    overwrite = text.set_permissions.call_args.kwargs["overwrite"]
+    assert overwrite.view_channel is True
+    assert overwrite.pin_messages is True
+    assert overwrite.mention_everyone is True
+    assert overwrite.manage_messages is None, (
+        "pinning must not hand the team bulk-delete as well"
+    )
+    assert overwrite.manage_channels is None, "an off toggle must not deny or grant"
+
+
+async def test_unchanged_channel_costs_no_permission_call() -> None:
+    guild, channels = _provisioned_guild()
+    from features.tilerace import overwrites
+
+    settled = overwrites.member_grant(perms.text_flags({"pin_messages": True}))
+    channels[900000000000000005].overwrites_for = MagicMock(return_value=settled)
+
+    await provisioning.apply(
+        guild,
+        _provisioned_command(pin_messages=True),
+        None,
+        provisioning.empty_result(),
+    )
+    channels[900000000000000005].set_permissions.assert_not_called()
+
+
+def test_toggles_map_to_the_documented_permissions() -> None:
+    assert perms.text_flags({"pin_messages": True}) == {"pin_messages": True}
+    assert perms.text_flags({"manage_messages": True}) == {"manage_messages": True}
+    assert perms.text_flags({"manage_threads": True}) == {
+        "manage_threads": True,
+        "create_public_threads": True,
+        "send_messages_in_threads": True,
+    }
+    assert perms.voice_flags({"voice_moderation": True}) == {
+        "mute_members": True,
+        "deafen_members": True,
+        "move_members": True,
+    }
+    assert perms.text_flags({"voice_moderation": True}) == {}, (
+        "a voice-only toggle must not leak onto a text channel"
+    )
+    assert perms.text_flags(None) == {}
+
+
+def test_every_contract_toggle_is_wired_to_something() -> None:
+    for toggle in _fixture()["permission_toggles"]:
+        granted = perms.text_flags({toggle: True}) | perms.voice_flags({toggle: True})
+        assert granted, f"{toggle} is in the contract but grants nothing"
 
 
 def test_channel_names_are_discord_safe() -> None:

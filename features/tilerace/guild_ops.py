@@ -7,7 +7,7 @@ import contextlib
 import discord
 from loguru import logger
 
-from . import naming, overwrites
+from . import naming, overwrites, perms
 
 _REASON = "Tile race provisioning"
 
@@ -44,16 +44,21 @@ async def ensure_text_channel(
     name: str,
     role: discord.Role,
     staff: discord.Role | None,
+    toggles: dict[str, bool] | None = None,
 ) -> discord.TextChannel:
+    extra = perms.text_flags(toggles)
     existing = guild.get_channel(channel_id) if channel_id else None
     if isinstance(existing, discord.TextChannel):
         if existing.name != name:
             await existing.edit(name=name, reason=_REASON)
+        await perms.sync_role_overwrite(
+            existing, role, overwrites.member_grant(extra), _REASON
+        )
         return existing
     return await guild.create_text_channel(
         name,
         category=category,
-        overwrites=overwrites.team_channel(guild, role, staff),
+        overwrites=overwrites.team_channel(guild, role, staff, extra),
         reason=_REASON,
     )
 
@@ -65,16 +70,21 @@ async def ensure_voice_channel(
     name: str,
     role: discord.Role,
     staff: discord.Role | None,
+    toggles: dict[str, bool] | None = None,
 ) -> discord.VoiceChannel:
+    extra = perms.voice_flags(toggles)
     existing = guild.get_channel(channel_id) if channel_id else None
     if isinstance(existing, discord.VoiceChannel):
         if existing.name != name:
             await existing.edit(name=name, reason=_REASON)
+        await perms.sync_role_overwrite(
+            existing, role, overwrites.member_grant(extra), _REASON
+        )
         return existing
     return await guild.create_voice_channel(
         name,
         category=category,
-        overwrites=overwrites.team_channel(guild, role, staff),
+        overwrites=overwrites.team_channel(guild, role, staff, extra),
         reason=_REASON,
     )
 

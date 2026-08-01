@@ -39,6 +39,7 @@ async def apply(
     on team nine leaves nine orphaned roles nothing can find again.
     """
     event_name = str(command.get("event_name") or "Tile Race")
+    toggles = command.get("permissions") or {}
     category = await guild_ops.ensure_category(
         guild,
         _int_or_none(command.get("category_id")),
@@ -59,6 +60,7 @@ async def apply(
         "captains",
         captains_role,
         staff,
+        toggles,
     )
     sink["captains_channel_id"] = captains_channel.id
     await guild_ops.reconcile_members(
@@ -68,7 +70,7 @@ async def apply(
     )
 
     for team in command.get("teams", []):
-        sink["teams"].append(await _apply_team(guild, category, team, staff))
+        sink["teams"].append(await _apply_team(guild, category, team, staff, toggles))
 
 
 async def _apply_team(
@@ -76,6 +78,7 @@ async def _apply_team(
     category: discord.CategoryChannel,
     team: dict[str, Any],
     staff: discord.Role | None,
+    toggles: dict[str, bool],
 ) -> dict[str, Any]:
     role_name, text_name, voice_name = guild_ops.team_names(team)
     role = await guild_ops.ensure_role(
@@ -88,6 +91,7 @@ async def _apply_team(
         text_name,
         role,
         staff,
+        toggles,
     )
     voice = await guild_ops.ensure_voice_channel(
         guild,
@@ -96,6 +100,7 @@ async def _apply_team(
         voice_name,
         role,
         staff,
+        toggles,
     )
     await guild_ops.reconcile_members(
         guild, role, {int(uid) for uid in team.get("member_user_ids", [])}
