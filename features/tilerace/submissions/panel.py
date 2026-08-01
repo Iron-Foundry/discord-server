@@ -32,17 +32,19 @@ class SubmissionPanel(discord.ui.LayoutView):
         self.add_item(panel_container(SubmitButton()))
 
 
-async def refresh(channel: discord.TextChannel) -> discord.Message | None:
-    """Make sure the channel's newest message is a live Submit panel.
+async def ensure(channel: discord.TextChannel) -> discord.Message | None:
+    """Make sure the channel holds exactly one live Submit panel.
 
-    Re-posting is cheap and idempotent enough: an old panel from a previous
-    event is deleted rather than left behind for someone to press.
+    Runs on every setup and sync, so a channel added to an event that was
+    already provisioned still gets its button. An existing panel is left in
+    place: re-posting on each roster edit would bury the channel and move the
+    message teams have scrolled back to.
     """
     try:
-        async for message in channel.history(limit=20):
+        async for message in channel.history(limit=50):
             if message.author == channel.guild.me and message.components:
-                await message.delete()
+                return message
         return await channel.send(view=SubmissionPanel())
     except discord.HTTPException as exc:
-        logger.warning("tilerace submissions: could not refresh the panel - {}", exc)
+        logger.warning("tilerace submissions: could not post the panel - {}", exc)
         return None

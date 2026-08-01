@@ -1,4 +1,4 @@
-from .panel import SubmissionPanel, refresh
+from .panel import SubmissionPanel, ensure
 from .review import VerdictButton
 
-__all__ = ["SubmissionPanel", "VerdictButton", "refresh"]
+__all__ = ["SubmissionPanel", "VerdictButton", "ensure"]

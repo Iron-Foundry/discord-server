@@ -9,6 +9,15 @@ Bump with `uv version --bump patch|minor` (or `alpha|beta|rc` for a
 prerelease, `stable` to drop the tag). A MAJOR bump is the maintainer's call
 and is never made automatically.
 
+## [1.3.1] - 2026-08-01
+
+### Fixed
+
+- The tile race Submit panel is posted on a sync, not only on the first setup.
+  An event provisioned before the submissions channel existed can only gain it
+  from a sync, which left the new channel empty with no button. Posting is
+  idempotent, so an existing panel is never buried under a second one.
+
 ## [1.3.0] - 2026-08-01
 
 ### Added

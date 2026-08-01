@@ -107,7 +107,7 @@ class TileRaceService(Service):
                 result = await provisioning.teardown(self._guild, command)
             else:
                 await provisioning.apply(self._guild, command, staff, result)
-                await self._refresh_panel(command, result)
+                await self._ensure_panel(result)
         except (discord.Forbidden, discord.HTTPException) as exc:
             logger.error(
                 "TileRaceService: {} failed part-way for event {} - {}",
@@ -125,19 +125,16 @@ class TileRaceService(Service):
                 len(result["teams"]),
             )
 
-    async def _refresh_panel(
-        self, command: dict[str, Any], result: dict[str, Any]
-    ) -> None:
-        """Put a live Submit panel in the submissions channel after a setup.
+    async def _ensure_panel(self, result: dict[str, Any]) -> None:
+        """Put a live Submit panel in the submissions channel.
 
-        A sync leaves an existing panel alone: re-posting on every roster edit
-        would bury the channel and break the pinned message teams look for.
+        Runs on setup and sync alike, because an event provisioned before the
+        channel existed only ever gets it on a sync. Posting is idempotent, so
+        a panel that is already there is never buried under a new one.
         """
-        if command.get("action") != "setup":
-            return
         channel = self._guild.get_channel(result.get("submissions_channel_id") or 0)
         if isinstance(channel, discord.TextChannel):
-            await submissions.refresh(channel)
+            await submissions.ensure(channel)
 
     async def _staff_role(self) -> discord.Role | None:
         role_ids = await get_staff_role_ids()
