@@ -9,7 +9,7 @@ Bump with `uv version --bump patch|minor` (or `alpha|beta|rc` for a
 prerelease, `stable` to drop the tag). A MAJOR bump is the maintainer's call
 and is never made automatically.
 
-## [Unreleased]
+## [1.2.0] - 2026-08-01
 
 ### Added
 
