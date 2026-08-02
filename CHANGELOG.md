@@ -9,6 +9,16 @@ Bump with `uv version --bump patch|minor` (or `alpha|beta|rc` for a
 prerelease, `stable` to drop the tag). A MAJOR bump is the maintainer's call
 and is never made automatically.
 
+## [Unreleased]
+
+### Changed
+
+- The integration suite builds its schema once per worker and empties the tables
+  between tests, instead of running `create_all` and `drop_all` around every
+  single one. It also takes its Postgres from the test runner when offered
+  (`TEST_DATABASE_URL`), carving out its own database so it can run alongside
+  the api-backend suite on one shared container.
+
 ## [1.4.1] - 2026-08-01
 
 ### Fixed

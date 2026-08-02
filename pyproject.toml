@@ -28,6 +28,7 @@ dev = [
     "anyio>=4.11.0",
     "pyright>=1.1.411",
     "pytest-asyncio>=1.4.0",
+    "pytest-xdist>=3.8.0",
     "ruff>=0.16.0",
     "testcontainers>=4.14.2",
 ]
@@ -55,6 +56,8 @@ allowed-confusables = ["×", "➕", "➖", "’"]
 pythonpath = ["."]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 addopts = "-m 'not integration'"
 markers = [
     "integration: real-infra tests needing a Postgres container (deselected by default)",
