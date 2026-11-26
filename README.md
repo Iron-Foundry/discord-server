@@ -46,6 +46,7 @@ All configuration is read from a `.env` file in the project root.
 | `SENIOR_STAFF_ROLE_ID` | Role ID for Senior Staff. |
 | `OWNER_ROLE_ID` | Role ID for Owners. |
 | `MENTOR_ROLE_ID` | Role ID for Mentors. |
+| `TICKET_SUPPORT_ROLE_ID` | Role ID for Tickets & Support (General, Rankup, Join CC tickets). |
 
 ### Optional
 

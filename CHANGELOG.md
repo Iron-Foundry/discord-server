@@ -13,6 +13,10 @@ and is never made automatically.
 
 ### Changed
 
+- General, Rank Up and Join CC tickets now grant channel access to the
+  Tickets & Support role and ping it on creation, alongside Staff
+  (`TICKET_SUPPORT_ROLE_ID`, required).
+
 - The integration suite builds its schema once per worker and empties the tables
   between tests, instead of running `create_all` and `drop_all` around every
   single one. It also takes its Postgres from the test runner when offered

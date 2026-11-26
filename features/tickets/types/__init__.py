@@ -32,6 +32,7 @@ def register_all_types(service: TicketService) -> None:
       SENIOR_STAFF_ROLE_ID - Handles Sensitive tickets
       OWNER_ROLE_ID        - Handles Sensitive tickets
       MENTOR_ROLE_ID       - Handles Contact Mentor tickets
+      TICKET_SUPPORT_ROLE_ID - Handles General, Rankup, Join CC
     """
     from core.config import ConfigInterface, ConfigVars
 
@@ -44,10 +45,17 @@ def register_all_types(service: TicketService) -> None:
         return int(val)
 
     staff = role_id(ConfigVars.STAFF_ROLE_ID)
+    support = role_id(ConfigVars.TICKET_SUPPORT_ROLE_ID)
 
-    service.type_registry.register(GeneralTicket(staff_role_id=staff))
-    service.type_registry.register(RankupTicket(staff_role_id=staff))
-    service.type_registry.register(JoinCCTicket(staff_role_id=staff))
+    service.type_registry.register(
+        GeneralTicket(staff_role_id=staff, support_role_id=support)
+    )
+    service.type_registry.register(
+        RankupTicket(staff_role_id=staff, support_role_id=support)
+    )
+    service.type_registry.register(
+        JoinCCTicket(staff_role_id=staff, support_role_id=support)
+    )
     service.type_registry.register(
         ContactMentorTicket(
             mentor_role_id=role_id(ConfigVars.MENTOR_ROLE_ID), staff_role_id=staff

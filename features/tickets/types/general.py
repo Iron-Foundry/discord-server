@@ -12,8 +12,11 @@ from features.tickets.views._layout_helpers import header_items
 class GeneralTicket(TicketTypeConfig):
     """General / miscellaneous support ticket."""
 
-    def __init__(self, staff_role_id: int) -> None:
-        self._teams = [TicketTeam(name="Staff", role_id=staff_role_id)]
+    def __init__(self, staff_role_id: int, support_role_id: int) -> None:
+        self._teams = [
+            TicketTeam(name="Staff", role_id=staff_role_id),
+            TicketTeam(name="Tickets & Support", role_id=support_role_id),
+        ]
         self._db_overrides: dict[str, Any] = {}
 
     @property
